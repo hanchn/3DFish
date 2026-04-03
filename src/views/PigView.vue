@@ -409,6 +409,9 @@ function createApple(position, type) {
 }
 
 function onClick(event) {
+  // 防止点击底部水果菜单时触发场景点击
+  if (event.target && event.target.closest && event.target.closest('.fruit-menu')) return
+
   initAudio()
   
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
