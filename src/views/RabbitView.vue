@@ -7,8 +7,8 @@
       </div>
       <div class="controls-hint">
         🐰 兔子拔萝卜<br>
-        [W/A/S/D] 或 [方向键] 控制兔子移动<br>
-        [空格键] 拔出面前的萝卜
+        [鼠标左键点击] 地面让兔子跳过去<br>
+        [鼠标左键点击] 萝卜，兔子会自动跳过去并拔出萝卜
       </div>
     </div>
   </div>
@@ -24,25 +24,25 @@ const score = ref(0)
 
 let scene, camera, renderer, animationFrameId
 let rabbitGroup, carrotsArray = []
+let groundPlane
 
-// Input state
-const keys = { w: false, a: false, s: false, d: false, space: false }
-const rabbitSpeed = 0.15
+// Mouse interaction state
+const raycaster = new THREE.Raycaster()
+const mouse = new THREE.Vector2()
+let targetPosition = null
 
 onMounted(() => {
   initScene()
   createRabbit()
   createCarrotField()
   
-  window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('click', onMouseClick)
   
   animate()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('click', onMouseClick)
   cancelAnimationFrame(animationFrameId)
   
   if (renderer && container.value) {
@@ -87,6 +87,13 @@ function initScene() {
   ground.rotation.x = -Math.PI / 2
   ground.receiveShadow = true
   scene.add(ground)
+  
+  groundPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshBasicMaterial({ visible: false })
+  )
+  groundPlane.rotation.x = -Math.PI / 2
+  scene.add(groundPlane)
 }
 
 function createRabbit() {
@@ -196,58 +203,71 @@ function createCarrotField() {
   }
 }
 
-function onKeyDown(e) {
-  const key = e.key.toLowerCase()
-  if (keys.hasOwnProperty(key)) keys[key] = true
-  if (e.key === 'ArrowUp') keys.w = true
-  if (e.key === 'ArrowDown') keys.s = true
-  if (e.key === 'ArrowLeft') keys.a = true
-  if (e.key === 'ArrowRight') keys.d = true
-  if (e.code === 'Space') keys.space = true
-}
+function onMouseClick(event) {
+  if (rabbitGroup.userData.isPulling) return
 
-function onKeyUp(e) {
-  const key = e.key.toLowerCase()
-  if (keys.hasOwnProperty(key)) keys[key] = false
-  if (e.key === 'ArrowUp') keys.w = false
-  if (e.key === 'ArrowDown') keys.s = false
-  if (e.key === 'ArrowLeft') keys.a = false
-  if (e.key === 'ArrowRight') keys.d = false
-  if (e.code === 'Space') keys.space = false
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+
+  raycaster.setFromCamera(mouse, camera)
+
+  // First check if we clicked a carrot
+  let clickedCarrot = null
+  let carrotIndex = -1
+  
+  const activeCarrots = carrotsArray.filter(c => c !== null)
+  const intersects = raycaster.intersectObjects(activeCarrots, true)
+  
+  if (intersects.length > 0) {
+    // Find the root group of the clicked carrot
+    let obj = intersects[0].object
+    while (obj.parent && obj.parent !== scene) {
+      obj = obj.parent
+    }
+    clickedCarrot = obj
+    carrotIndex = carrotsArray.indexOf(clickedCarrot)
+  }
+
+  if (clickedCarrot) {
+    targetPosition = clickedCarrot.position.clone()
+    rabbitGroup.userData.targetCarrot = clickedCarrot
+    rabbitGroup.userData.targetCarrotIndex = carrotIndex
+  } else {
+    // If no carrot clicked, check ground
+    const groundIntersects = raycaster.intersectObject(groundPlane)
+    if (groundIntersects.length > 0) {
+      targetPosition = groundIntersects[0].point.clone()
+      rabbitGroup.userData.targetCarrot = null
+    }
+  }
+
+  if (targetPosition) {
+    // Make rabbit face the target
+    rabbitGroup.lookAt(targetPosition.x, rabbitGroup.position.y, targetPosition.z)
+  }
 }
 
 function animate() {
   animationFrameId = requestAnimationFrame(animate)
   
-  if (rabbitGroup && !rabbitGroup.userData.isPulling) {
-    let moveX = 0
-    let moveZ = 0
+  if (rabbitGroup && targetPosition && !rabbitGroup.userData.isPulling) {
+    const currentPos = rabbitGroup.position.clone()
+    currentPos.y = 0
+    const targetPos2D = targetPosition.clone()
+    targetPos2D.y = 0
     
-    if (keys.w) moveZ -= 1
-    if (keys.s) moveZ += 1
-    if (keys.a) moveX -= 1
-    if (keys.d) moveX += 1
+    const distance = currentPos.distanceTo(targetPos2D)
     
-    const isMoving = moveX !== 0 || moveZ !== 0
-    
-    if (isMoving) {
-      // Normalize vector
-      const length = Math.sqrt(moveX * moveX + moveZ * moveZ)
-      moveX = (moveX / length) * rabbitSpeed
-      moveZ = (moveZ / length) * rabbitSpeed
-      
-      rabbitGroup.position.x += moveX
-      rabbitGroup.position.z += moveZ
-      
-      // Rotate rabbit to face movement direction
-      const angle = Math.atan2(moveX, moveZ)
-      rabbitGroup.rotation.y = angle
+    if (distance > 0.5) {
+      // Move towards target
+      const dir = targetPos2D.sub(currentPos).normalize()
+      rabbitGroup.position.add(dir.multiplyScalar(0.2))
       
       // Hopping animation
       if (!rabbitGroup.userData.isHopping) {
         rabbitGroup.userData.isHopping = true
         gsap.to(rabbitGroup.position, {
-          y: 0.5,
+          y: 0.8,
           duration: 0.15,
           yoyo: true,
           repeat: 1,
@@ -257,41 +277,32 @@ function animate() {
           }
         })
       }
+    } else {
+      // Reached destination
+      rabbitGroup.position.x = targetPosition.x
+      rabbitGroup.position.z = targetPosition.z
+      targetPosition = null
+      
+      // If destination was a carrot, start pulling!
+      if (rabbitGroup.userData.targetCarrot) {
+        pullCarrot(rabbitGroup.userData.targetCarrot, rabbitGroup.userData.targetCarrotIndex)
+        rabbitGroup.userData.targetCarrot = null
+      }
     }
-    
-    // Pulling action
-    if (keys.space && !rabbitGroup.userData.isPulling) {
-      pullCarrot()
-    }
-    
+  }
+  
+  if (rabbitGroup) {
     // Camera follow
-    camera.position.x = rabbitGroup.position.x
-    camera.position.z = rabbitGroup.position.z + 15
-    camera.lookAt(rabbitGroup.position)
+    camera.position.x += (rabbitGroup.position.x - camera.position.x) * 0.1
+    camera.position.z += (rabbitGroup.position.z + 15 - camera.position.z) * 0.1
+    camera.lookAt(rabbitGroup.position.x, 0, rabbitGroup.position.z)
   }
   
   renderer.render(scene, camera)
 }
 
-function pullCarrot() {
+function pullCarrot(carrot, index) {
   rabbitGroup.userData.isPulling = true
-  
-  // Find closest carrot
-  let closestCarrot = null
-  let minDistance = 2.0 // Pull range
-  let closestIndex = -1
-  
-  for (let i = 0; i < carrotsArray.length; i++) {
-    const carrot = carrotsArray[i]
-    if (!carrot) continue
-    
-    const dist = rabbitGroup.position.distanceTo(carrot.position)
-    if (dist < minDistance) {
-      minDistance = dist
-      closestCarrot = carrot
-      closestIndex = i
-    }
-  }
   
   // Pull animation (dip down then jump up)
   gsap.to(rabbitGroup.position, {
@@ -299,35 +310,32 @@ function pullCarrot() {
     duration: 0.2,
     ease: 'power2.in',
     onComplete: () => {
-      if (closestCarrot) {
-        // We found a carrot!
-        // Remove it from ground
-        carrotsArray[closestIndex] = null
+      if (carrot) {
+        carrotsArray[index] = null
         
         // Pop the carrot out
-        gsap.to(closestCarrot.position, {
+        gsap.to(carrot.position, {
           y: 3,
           duration: 0.3,
           ease: 'back.out(1.7)'
         })
-        gsap.to(closestCarrot.rotation, {
+        gsap.to(carrot.rotation, {
           x: Math.PI * 2,
           y: Math.PI * 2,
           duration: 0.5
         })
         
         // Carrot disappears
-        gsap.to(closestCarrot.scale, {
+        gsap.to(carrot.scale, {
           x: 0, y: 0, z: 0,
           duration: 0.2,
           delay: 0.4,
           onComplete: () => {
-            scene.remove(closestCarrot)
+            scene.remove(carrot)
             score.value++
             
-            // Check win condition
             if (score.value >= 40) {
-              alert("你拔光了所有的萝卜！兔子吃饱了！")
+              setTimeout(() => alert("你拔光了所有的萝卜！兔子吃饱了！"), 500)
             }
           }
         })
