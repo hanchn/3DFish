@@ -867,7 +867,8 @@ import { spawnBubble } from './interactions.js'
       gsap.to(fruit.scale, { x: 1, y: 1, z: 1, duration: 2, ease: 'elastic.out(1, 0.5)' })
     }
   }
-  
+}
+
   seaweedArray.forEach(seaweed => {
     if (!seaweed || !seaweed.geometry) return
     const positions = seaweed.geometry.attributes.position
