@@ -227,9 +227,26 @@ export function animateGame(
         }
       }
       
-      const boundsX = isPlaying ? 35 : 8
+      let boundsX = isPlaying ? 45 : 8
       const boundsY = isPlaying ? 15 : 8
-      const boundsZ = isPlaying ? 35 : 4
+      let boundsZ = isPlaying ? 45 : 4
+      let centerX = 0
+      let centerZ = 0
+      
+      if (isPlaying && !isFleeingPlayer) {
+        // Dynamic density: 5 fish per 2m radius
+        // The fewer the fish, the smaller the radius, keeping them close to the player
+        const dynamicRadius = Math.max(2, Math.sqrt(fishArray.length / 5) * 2.0)
+        boundsX = dynamicRadius
+        boundsZ = dynamicRadius
+        
+        // Center the swarm slightly in front of the camera so they follow the player
+        const viewDir = new THREE.Vector3()
+        camera.getWorldDirection(viewDir)
+        centerX = camera.position.x + viewDir.x * 4
+        centerZ = camera.position.z + viewDir.z * 4
+      }
+
       const p = fish.position
       const v = fish.userData.velocity
       
@@ -241,26 +258,27 @@ export function animateGame(
           fish.userData.targetDirection.set(Math.random()-0.5, (Math.random()-0.5)*0.2, Math.random()-0.5).normalize()
         }
         
-        if (p.x > boundsX) { fish.userData.targetDirection.x = -Math.abs(fish.userData.targetDirection.x) - 0.1; v.x -= 0.01 }
-        if (p.x < -boundsX) { fish.userData.targetDirection.x = Math.abs(fish.userData.targetDirection.x) + 0.1; v.x += 0.01 }
+        if (p.x > centerX + boundsX) { fish.userData.targetDirection.x = -Math.abs(fish.userData.targetDirection.x) - 0.1; v.x -= 0.01 }
+        if (p.x < centerX - boundsX) { fish.userData.targetDirection.x = Math.abs(fish.userData.targetDirection.x) + 0.1; v.x += 0.01 }
         if (p.y > boundsY) { fish.userData.targetDirection.y = -Math.abs(fish.userData.targetDirection.y) - 0.1; v.y -= 0.01 }
         if (p.y < 1) { 
           fish.userData.targetDirection.y = Math.abs(fish.userData.targetDirection.y) + 0.1; 
           v.y += 0.01; 
           if (p.y < 0.5) p.y = 0.5; // Prevent clipping through the floor and accumulating infinite upward velocity
         }
-        if (p.z > boundsZ) { fish.userData.targetDirection.z = -Math.abs(fish.userData.targetDirection.z) - 0.1; v.z -= 0.01 }
-        if (p.z < -boundsZ) { fish.userData.targetDirection.z = Math.abs(fish.userData.targetDirection.z) + 0.1; v.z += 0.01 }
+        if (p.z > centerZ + boundsZ) { fish.userData.targetDirection.z = -Math.abs(fish.userData.targetDirection.z) - 0.1; v.z -= 0.01 }
+        if (p.z < centerZ - boundsZ) { fish.userData.targetDirection.z = Math.abs(fish.userData.targetDirection.z) + 0.1; v.z += 0.01 }
         fish.userData.targetDirection.normalize()
         
         v.lerp(fish.userData.targetDirection.clone().multiplyScalar(targetSpeed), 0.02)
       } else {
-        if (p.x > boundsX) v.x -= 0.005
-        if (p.x < -boundsX) v.x += 0.005
+        const globalBounds = 45;
+        if (p.x > globalBounds) v.x -= 0.005
+        if (p.x < -globalBounds) v.x += 0.005
         if (p.y > boundsY) v.y -= 0.005
         if (p.y < 1) v.y += 0.005
-        if (p.z > boundsZ) v.z -= 0.005
-        if (p.z < -boundsZ) v.z += 0.005
+        if (p.z > globalBounds) v.z -= 0.005
+        if (p.z < -globalBounds) v.z += 0.005
         v.normalize().multiplyScalar(targetSpeed)
       }
     }
