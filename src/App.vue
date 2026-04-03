@@ -324,10 +324,10 @@ function startGame() {
   
   // Expand environment objects outwards
   floor.visible = true
-  rockArray.forEach(rock => {
-    gsap.to(rock.position, {
-      x: rock.userData.targetPosition.x,
-      z: rock.userData.targetPosition.z,
+  fruitArray.forEach(fruit => {
+    gsap.to(fruit.position, {
+      x: fruit.userData.targetPosition.x,
+      z: fruit.userData.targetPosition.z,
       duration: 2.5,
       ease: 'power2.inOut'
     })

@@ -704,7 +704,7 @@ import { spawnBubble } from './interactions.js'
           })
         })
       })
-    } else {
+    } else if (spawnType === 'tree') {
       // Spawn a fruit tree
       import('./environment.js').then(({ createFruitTrees }) => {
         // Create 1 tree. createFruitTrees currently spawns 6, so we need a targeted spawn
@@ -803,6 +803,68 @@ import { spawnBubble } from './interactions.js'
           ease: 'elastic.out(1, 0.5)'
         })
       })
+    } else if (spawnType === 'seaweed') {
+      const isTriangle = Math.random() > 0.5
+      let seaweedGeo, seaweed
+      
+      if (isTriangle) {
+        const triSeaweedMaterial = new THREE.MeshStandardMaterial({ color: 0x32cd32, roughness: 0.5, side: THREE.DoubleSide })
+        const height = 1.5 + Math.random() * 2
+        seaweedGeo = new THREE.ConeGeometry(0.4 + Math.random() * 0.2, height, 3)
+        seaweedGeo.translate(0, height / 2, 0)
+        seaweed = new THREE.Mesh(seaweedGeo, triSeaweedMaterial)
+      } else {
+        const seaweedMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.6, side: THREE.DoubleSide })
+        const segments = 6
+        const height = 2 + Math.random() * 5
+        const radius = 0.15 + Math.random() * 0.1
+        seaweedGeo = new THREE.CylinderGeometry(0.01, radius, height, 5, segments)
+        seaweedGeo.translate(0, height / 2, 0)
+        seaweed = new THREE.Mesh(seaweedGeo, seaweedMaterial)
+      }
+      
+      seaweed.position.set((Math.random() - 0.5) * 90, 0.2, (Math.random() - 0.5) * 90)
+      
+      seaweed.userData.originalVertices = []
+      seaweed.userData.isTriangle = isTriangle
+      const positionAttribute = seaweedGeo.attributes.position
+      for (let j = 0; j < positionAttribute.count; j++) {
+        seaweed.userData.originalVertices.push({
+          x: positionAttribute.getX(j),
+          y: positionAttribute.getY(j),
+          z: positionAttribute.getZ(j)
+        })
+      }
+      
+      seaweed.userData.swayOffset = Math.random() * Math.PI * 2
+      seaweed.castShadow = true
+      
+      seaweed.scale.set(0.01, 0.01, 0.01)
+      scene.add(seaweed)
+      seaweedArray.push(seaweed)
+      
+      gsap.to(seaweed.scale, { x: 1, y: 1, z: 1, duration: 2, ease: 'elastic.out(1, 0.5)' })
+    } else if (spawnType === 'fruit') {
+      const fruitColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x0000ff, 0x800080, 0xff1493]
+      const rSize = 0.3 + Math.random() * 0.3
+      const fruitGeo = new THREE.SphereGeometry(rSize, 16, 16)
+      const fruitMat = new THREE.MeshStandardMaterial({ 
+        color: fruitColors[Math.floor(Math.random() * fruitColors.length)], 
+        roughness: 0.6 
+      })
+      const fruit = new THREE.Mesh(fruitGeo, fruitMat)
+      
+      fruit.position.set((Math.random() - 0.5) * 90, rSize, (Math.random() - 0.5) * 90)
+      fruit.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0)
+      fruit.castShadow = true
+      fruit.receiveShadow = true
+      fruit.userData.isGroundFruit = true
+      
+      fruit.scale.set(0.01, 0.01, 0.01)
+      scene.add(fruit)
+      if (fruitArray) fruitArray.push(fruit)
+      
+      gsap.to(fruit.scale, { x: 1, y: 1, z: 1, duration: 2, ease: 'elastic.out(1, 0.5)' })
     }
   }
   
