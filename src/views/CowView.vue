@@ -83,13 +83,14 @@ function initScene() {
 }
 
 function spawnCows() {
-  for (let i = 0; i < 20; i++) { // spawn 20 cows
+  for (let i = 0; i < 6; i++) { // 减少生成的奶牛数量
     const cow = createFishModel('cow', 0xffffff)
+    cow.scale.set(3, 3, 3) // 把牛放大3倍
     
     // Position randomly on ground
     cow.position.set(
       (Math.random() - 0.5) * (groundSize - 10),
-      1, // roughly body height
+      3, // roughly body height (scaled up)
       (Math.random() - 0.5) * (groundSize - 10)
     )
     
@@ -97,6 +98,8 @@ function spawnCows() {
     cow.userData.target = getRandomTarget()
     cow.userData.isHovered = false
     cow.userData.speed = 0.03 + Math.random() * 0.03
+    cow.userData.hasMilked = false // 标记是否已经在这个位置被挤过奶
+    cow.userData.lastMilkPos = new THREE.Vector3() // 记录上次挤奶的位置
     
     // Bounding box for raycasting
     const boxGeo = new THREE.BoxGeometry(2.5, 3, 4)
@@ -114,13 +117,14 @@ function spawnCows() {
 function getRandomTarget() {
   return new THREE.Vector3(
     (Math.random() - 0.5) * (groundSize - 10),
-    1,
+    3,
     (Math.random() - 0.5) * (groundSize - 10)
   )
 }
 
 function createMilkBottle(position) {
   const group = new THREE.Group()
+  group.scale.set(1.5, 1.5, 1.5) // 奶瓶也稍微放大一点
   
   // Bottle body (glass)
   const bottleGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 16)
@@ -158,14 +162,14 @@ function createMilkBottle(position) {
   
   // Start position (drop from cow udder roughly)
   // Drop behind/below the cow a bit
+  const startY = position.y
   group.position.copy(position)
-  group.position.y = 0.5 
+  group.position.y = startY
   
   scene.add(group)
   milkBottles.push(group)
   
   // Drop animation
-  group.position.y = 1.5 // start higher
   gsap.to(group.position, {
     y: 0.5, // Ground level
     duration: 0.6,
@@ -202,55 +206,119 @@ function onMouseMove(event) {
   document.body.style.cursor = isPointer ? 'pointer' : 'default'
 }
 
+// Audio context for procedural mooing sound
+let audioCtx
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext
+    if (AudioContext) {
+      audioCtx = new AudioContext()
+    }
+  }
+}
+
+function playMooSound() {
+  if (!audioCtx) return
+  if (audioCtx.state === 'suspended') audioCtx.resume()
+
+  // Procedural "Moo" sound synthesis
+  const osc = audioCtx.createOscillator()
+  const gainNode = audioCtx.createGain()
+
+  // Cow sound is roughly a low frequency sawtooth or triangle with some pitch bending
+  osc.type = 'sawtooth'
+  osc.connect(gainNode)
+  gainNode.connect(audioCtx.destination)
+
+  const now = audioCtx.currentTime
+  const duration = 0.8
+
+  // Pitch bend: Start slightly high, drop low, end slightly higher
+  osc.frequency.setValueAtTime(150, now)
+  osc.frequency.exponentialRampToValueAtTime(80, now + duration * 0.4)
+  osc.frequency.linearRampToValueAtTime(70, now + duration * 0.8)
+  osc.frequency.linearRampToValueAtTime(100, now + duration)
+
+  // Volume envelope
+  gainNode.gain.setValueAtTime(0, now)
+  gainNode.gain.linearRampToValueAtTime(0.3, now + 0.1) // Attack
+  gainNode.gain.setValueAtTime(0.3, now + duration - 0.2) // Sustain
+  gainNode.gain.linearRampToValueAtTime(0, now + duration) // Release
+
+  osc.start(now)
+  osc.stop(now + duration)
+}
+
 function onClick(event) {
+  initAudio() // Initialize audio context on first user interaction
+  
+  // 必须重新计算鼠标位置以防未移动直接点击
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
+  
   raycaster.setFromCamera(mouse, camera)
   const intersects = raycaster.intersectObjects(scene.children, true)
   
+  // 优先检测奶瓶，这样当奶瓶和牛重叠时优先收集奶瓶
+  let clickedMilk = false
   for (let i = 0; i < intersects.length; i++) {
     const obj = intersects[i].object
-    
-    if (obj.userData.isCow) {
-      const cow = obj.userData.cowRef
-      
-      // Spawn milk bottle at cow's position
-      createMilkBottle(cow.position)
-      
-      // Little jump animation for cow
-      gsap.to(cow.position, {
-        y: 1.5,
-        duration: 0.15,
-        yoyo: true,
-        repeat: 1
-      })
-      break // only click one thing at a time
-    }
-    
     if (obj.userData.isMilk) {
       const milk = obj.userData.milkRef
       
-      // Prevent multiple clicks on same bottle
-      if (milk.userData.collected) break
-      milk.userData.collected = true
-      
-      // Collect milk
-      milkCount.value++
-      
-      // Animate collect
-      gsap.to(milk.position, {
-        y: milk.position.y + 3,
-        duration: 0.4,
-        ease: "power2.out"
-      })
-      gsap.to(milk.scale, {
-        x: 0, y: 0, z: 0,
-        duration: 0.4,
-        onComplete: () => {
-          scene.remove(milk)
-          const index = milkBottles.indexOf(milk)
-          if (index > -1) milkBottles.splice(index, 1)
-        }
-      })
+      if (!milk.userData.collected) {
+        milk.userData.collected = true
+        milkCount.value++
+        clickedMilk = true
+        
+        gsap.to(milk.position, {
+          y: milk.position.y + 3,
+          duration: 0.4,
+          ease: "power2.out"
+        })
+        gsap.to(milk.scale, {
+          x: 0, y: 0, z: 0,
+          duration: 0.4,
+          onComplete: () => {
+            scene.remove(milk)
+            const index = milkBottles.indexOf(milk)
+            if (index > -1) milkBottles.splice(index, 1)
+          }
+        })
+      }
       break
+    }
+  }
+
+  // 如果没有点到奶瓶，再检测是否点到了牛
+  if (!clickedMilk) {
+    for (let i = 0; i < intersects.length; i++) {
+      const obj = intersects[i].object
+      
+      if (obj.userData.isCow) {
+        const cow = obj.userData.cowRef
+        
+        // 如果这头牛还没被挤过奶，或者已经移动了一段距离（被重置了状态），才能产奶
+        if (!cow.userData.hasMilked) {
+          cow.userData.hasMilked = true
+          cow.userData.lastMilkPos.copy(cow.position)
+          
+          playMooSound() // 播放哞哞叫
+          
+          // Spawn milk bottle at cow's position
+          createMilkBottle(cow.position)
+          
+          // Little jump animation for cow
+          gsap.to(cow.position, {
+            y: 4.5,
+            duration: 0.15,
+            yoyo: true,
+            repeat: 1
+          })
+        }
+        break // 每次只点击一头牛
+      }
     }
   }
 }
@@ -261,6 +329,11 @@ function animate() {
   // Update cows
   cows.forEach(cow => {
     if (!cow.userData.isHovered) {
+      // 检查奶牛是否离开了上次被挤奶的位置超过一定距离（比如 5个单位）
+      if (cow.userData.hasMilked && cow.position.distanceTo(cow.userData.lastMilkPos) > 5) {
+        cow.userData.hasMilked = false // 重置状态，可以再次挤奶了
+      }
+      
       // Move towards target
       const dir = new THREE.Vector3().subVectors(cow.userData.target, cow.position)
       dir.y = 0 // ignore vertical distance
@@ -282,12 +355,12 @@ function animate() {
         cow.rotation.y += diff * 0.1
         
         // Bobbing motion
-        cow.position.y = 1 + Math.abs(Math.sin(Date.now() * 0.01 * cow.userData.speed * 100)) * 0.2
+        cow.position.y = 3 + Math.abs(Math.sin(Date.now() * 0.01 * cow.userData.speed * 100)) * 0.5
       }
     } else {
       // If hovered, slightly wiggle or just stop
       // Reset y position
-      cow.position.y = 1
+      cow.position.y = 3
     }
   })
   
