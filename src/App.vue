@@ -42,6 +42,7 @@ import { createEnvironment } from './utils/environment.js'
 import { spawnMushroom, spawnInitialMushrooms } from './utils/mushroom.js'
 import { createFishes, spawnBabyFishes } from './utils/fishes.js'
 import { createWaterGun, spawnBubble, shootWaterBullet, dropFoodAtCenter } from './utils/interactions.js'
+import { animateGame } from './utils/animate.js'
 
 const canvasContainer = ref(null)
 const gameState = ref('start') // 'start' or 'playing'
