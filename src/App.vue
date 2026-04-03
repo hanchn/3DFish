@@ -59,7 +59,7 @@ let animationFrameId
 let clock
 let table, tankGroup, water
 let seaweedArray = []
-let rockArray = []
+let fruitArray = []
 let mushroomArray = []
 let bubbleArray = []
 let floor
@@ -104,7 +104,7 @@ onMounted(() => {
   
   createEnvironment(
     scene,
-    rockArray,
+    fruitArray,
     seaweedArray,
     waterSurfacePlaneRef,
     tableRef,
@@ -438,7 +438,7 @@ function animate() {
   animateGame(
     delta, now, time, gameState.value, camera, scene, controls,
     waterGun, moveState, fishArray, { value: fishCount.value },
-    foodArray, mushroomArray, seaweedArray, bubbleArray, waterBullets, rockArray
+    foodArray, mushroomArray, seaweedArray, bubbleArray, waterBullets, fruitArray
   )
   
   // Need to manually keep reactive ref in sync

@@ -3,7 +3,7 @@ import gsap from 'gsap'
 
 export function createEnvironment(
   scene,
-  rockArray,
+  fruitArray,
   seaweedArray,
   waterSurfacePlaneRef,
   tableRef,
@@ -83,31 +83,36 @@ export function createEnvironment(
   scene.add(waterSurfacePlane)
   if (waterSurfacePlaneRef) waterSurfacePlaneRef.value = waterSurfacePlane
   
-  // Rocks
-  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 })
+  // Ground Fruits (replacing Rocks)
+  const fruitColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x0000ff, 0x800080, 0xff1493]
   for(let i=0; i<30; i++) {
-    const rSize = 0.5 + Math.random() * 1.5
-    const rockGeo = new THREE.DodecahedronGeometry(rSize, 1)
-    const rock = new THREE.Mesh(rockGeo, rockMaterial)
+    const rSize = 0.3 + Math.random() * 0.3
+    const fruitGeo = new THREE.SphereGeometry(rSize, 16, 16)
+    const fruitMat = new THREE.MeshStandardMaterial({ 
+      color: fruitColors[Math.floor(Math.random() * fruitColors.length)], 
+      roughness: 0.6 
+    })
+    const fruit = new THREE.Mesh(fruitGeo, fruitMat)
     
     // Initial position inside the tank
     const initX = (Math.random() - 0.5) * (tankWidth - 4)
     const initZ = (Math.random() - 0.5) * (tankDepth - 4)
-    rock.position.set(initX, rSize / 2, initZ)
+    fruit.position.set(initX, rSize, initZ)
     
-    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0)
-    rock.castShadow = true
-    rock.receiveShadow = true
+    fruit.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0)
+    fruit.castShadow = true
+    fruit.receiveShadow = true
     
     // Store target expanded position for game start
-    rock.userData.targetPosition = new THREE.Vector3(
+    fruit.userData.targetPosition = new THREE.Vector3(
       (Math.random() - 0.5) * 80,
-      rSize / 2,
+      rSize,
       (Math.random() - 0.5) * 80
     )
     
-    scene.add(rock)
-    rockArray.push(rock)
+    fruit.userData.isGroundFruit = true
+    scene.add(fruit)
+    fruitArray.push(fruit)
   }
 
   // Seaweeds

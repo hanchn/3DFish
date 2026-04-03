@@ -5,24 +5,24 @@ import { spawnBabyFishes } from './fishes.js'
 import { spawnBubble } from './interactions.js'
 
   export function animateGame(
-    delta,
-    now,
-    time,
-    gameState,
-    camera,
-    scene,
-    controls,
-    waterGun,
-    moveState,
-    fishArray,
-    fishCountRef,
-    foodArray,
-    mushroomArray,
-    seaweedArray,
-    bubbleArray,
-    waterBullets,
-    rockArray
-  ) {
+  delta,
+  now,
+  time,
+  gameState,
+  camera,
+  scene,
+  controls,
+  waterGun,
+  moveState,
+  fishArray,
+  fishCountRef,
+  foodArray,
+  mushroomArray,
+  seaweedArray,
+  bubbleArray,
+  waterBullets,
+  fruitArray
+) {
   // Update controls
   controls.update()
   
@@ -138,16 +138,40 @@ import { spawnBubble } from './interactions.js'
         }
       })
       
+      seaweedArray.forEach((sw, index) => {
+        if (!sw) return
+        const dist = fish.position.distanceTo(sw.position)
+        if (dist < minDist) {
+          minDist = dist
+          targetItem = sw
+          targetType = 'seaweed'
+          itemIndex = index
+        }
+      })
+      
+      if (fruitArray) {
+        fruitArray.forEach((fruit, index) => {
+          if (!fruit) return
+          const dist = fish.position.distanceTo(fruit.position)
+          if (dist < minDist) {
+            minDist = dist
+            targetItem = fruit
+            targetType = 'fruit'
+            itemIndex = index
+          }
+        })
+      }
+      
       if (targetItem) {
         targetVec = targetItem.position.clone().sub(fish.position)
-        // Adjust targeting slightly above the mushroom base so fish doesn't dive into the floor
+        // Adjust targeting slightly above the base so fish doesn't dive into the floor
         // For fruit trees, target the canopy
-        if (targetType === 'mushroom') {
-          if (targetItem.userData.isFruitTree) {
-             targetVec.y += 1.5 
-          } else {
-             targetVec.y += 0.2 
-          }
+        if (targetItem.userData.isFruitTree) {
+           targetVec.y += 1.5 
+        } else if (targetType === 'mushroom' || targetType === 'fruit') {
+           targetVec.y += 0.2 
+        } else if (targetType === 'seaweed') {
+           targetVec.y += 1.0
         }
         targetVec.normalize()
         
@@ -158,18 +182,28 @@ import { spawnBubble } from './interactions.js'
           fish.userData.lastEatenTime = now
           playSound('pop')
           
-          let isPoisonous = false
+          let isPoisonous = targetItem.userData ? targetItem.userData.isPoisonous : false
+          
           if (targetType === 'playerFood') {
             scene.remove(targetItem)
             foodArray[itemIndex] = null // will filter below
-          } else if (targetType === 'mushroom') {
-            isPoisonous = targetItem.userData.isPoisonous
+          } else {
+            // It's a mushroom, seaweed, or fruit
             gsap.to(targetItem.scale, {
               x: 0, y: 0, z: 0,
               duration: 0.2,
               onComplete: () => scene.remove(targetItem)
             })
-            mushroomArray[itemIndex] = null
+            
+            // Remove from all potential arrays just to be safe
+            const mIdx = mushroomArray.indexOf(targetItem)
+            if (mIdx > -1) mushroomArray[mIdx] = null
+            const sIdx = seaweedArray.indexOf(targetItem)
+            if (sIdx > -1) seaweedArray[sIdx] = null
+            if (fruitArray) {
+              const fIdx = fruitArray.indexOf(targetItem)
+              if (fIdx > -1) fruitArray[fIdx] = null
+            }
           }
           
           if (isPoisonous) {
@@ -186,9 +220,9 @@ import { spawnBubble } from './interactions.js'
             })
             // The 2s disappearance logic is now handled when the fish hits the bottom
           } else {
-            // Both player food and normal mushrooms count towards breeding
+            // Both player food and normal environment items count towards breeding
             fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
-            if (fish.userData.itemsEaten >= 2) {
+            if (fish.userData.itemsEaten >= 5) {
               gsap.to(fish.scale, {
                 x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
                 duration: 0.3, ease: "back.out(1.7)"
@@ -308,7 +342,7 @@ import { spawnBubble } from './interactions.js'
       fish.position.y = 1.0
       fish.userData.velocity.set(0, 0, 0)
       
-      if ((fish.userData.isPoisonedDead || fish.userData.isOldAgeDead) && !fish.userData.disappearing) {
+      if ((fish.userData.isPoisonedDead || fish.userData.isOldAgeDead || fish.userData.isKilledByBullet) && !fish.userData.disappearing) {
         fish.userData.disappearing = true
         setTimeout(() => {
           if (!fish || !fish.parent) return
@@ -422,49 +456,50 @@ import { spawnBubble } from './interactions.js'
           }
         }, 100)
 
-        if (fish.userData.hitCount >= 1) {
-            fish.userData.isStunned = true
-            fish.userData.isStartled = false
-            fish.userData.hitCount = 0
-            fish.userData.lastHitTime = Date.now()
-            
-            if (fish.userData.type === 'cow') playSound('moo')
-            else if (fish.userData.type === 'shark') playSound('hit_shark')
-            else if (fish.userData.type === 'turtle') playSound('hit_turtle')
-            else if (fish.userData.type === 'jellyfish') playSound('hit_jellyfish')
-            else if (fish.userData.type === 'long' || fish.userData.type === 'flat') playSound('hit_small')
-            else playSound('hit')
-            
-            fish.userData.velocity.set(0, -0.04, 0)
-            gsap.to(fish.rotation, { z: Math.PI, duration: 0.5, ease: 'power2.out' })
-            
-            setTimeout(() => {
-              if (fish && fish.userData) gsap.to(fish.rotation, { z: 0, duration: 0.5, ease: 'power2.inOut' })
-            }, 10000)
-            
-            setTimeout(() => {
-              if (fish && fish.userData) {
-                fish.userData.isStunned = false
-                fish.userData.isStartled = true
-                const escapeDir = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5) * 0.2, (Math.random() - 0.5)).normalize()
-                fish.userData.velocity.copy(escapeDir.multiplyScalar(0.2))
-                setTimeout(() => { if (fish && fish.userData) fish.userData.isStartled = false }, 3000)
-              }
-            }, 13000)
-          } else {
-            fish.userData.isStartled = true
-            if (fish.userData.type === 'cow') playSound('moo')
-            else if (fish.userData.type === 'shark') playSound('hit_shark')
-            else if (fish.userData.type === 'turtle') playSound('hit_turtle')
-            else if (fish.userData.type === 'jellyfish') playSound('hit_jellyfish')
-            else if (fish.userData.type === 'long' || fish.userData.type === 'flat') playSound('hit_small')
-            else playSound('hit')
+        if (fish.userData.hitCount >= 2) {
+          // Die if hit twice
+          fish.userData.isStunned = true
+          fish.userData.isStartled = false
+          fish.userData.isKilledByBullet = true
+          fish.userData.velocity.set(0, -0.05, 0)
           
-          const pushDir = bullet.userData.velocity.clone().normalize()
-          fish.userData.velocity.copy(pushDir.multiplyScalar(0.15))
+          if (fish.userData.type === 'cow') playSound('moo')
+          else if (fish.userData.type === 'shark') playSound('hit_shark')
+          else if (fish.userData.type === 'turtle') playSound('hit_turtle')
+          else if (fish.userData.type === 'jellyfish') playSound('hit_jellyfish')
+          else if (fish.userData.type === 'long' || fish.userData.type === 'flat') playSound('hit_small')
+          else playSound('hit')
+          
+          gsap.to(fish.rotation, { z: Math.PI, duration: 0.5, ease: 'power2.out' })
+        } else if (fish.userData.hitCount === 1) {
+          // Stunned on first hit
+          fish.userData.isStunned = true
+          fish.userData.isStartled = false
+          fish.userData.lastHitTime = Date.now()
+          
+          if (fish.userData.type === 'cow') playSound('moo')
+          else if (fish.userData.type === 'shark') playSound('hit_shark')
+          else if (fish.userData.type === 'turtle') playSound('hit_turtle')
+          else if (fish.userData.type === 'jellyfish') playSound('hit_jellyfish')
+          else if (fish.userData.type === 'long' || fish.userData.type === 'flat') playSound('hit_small')
+          else playSound('hit')
+          
+          fish.userData.velocity.set(0, -0.04, 0)
+          gsap.to(fish.rotation, { z: Math.PI, duration: 0.5, ease: 'power2.out' })
+          
           setTimeout(() => {
-            if (fish && fish.userData && !fish.userData.isStunned) fish.userData.isStartled = false
-          }, 2000)
+            if (fish && fish.userData && !fish.userData.isKilledByBullet) gsap.to(fish.rotation, { z: 0, duration: 0.5, ease: 'power2.inOut' })
+          }, 10000)
+          
+          setTimeout(() => {
+            if (fish && fish.userData && !fish.userData.isKilledByBullet) {
+              fish.userData.isStunned = false
+              fish.userData.isStartled = true
+              const escapeDir = new THREE.Vector3((Math.random() - 0.5), (Math.random() - 0.5) * 0.2, (Math.random() - 0.5)).normalize()
+              fish.userData.velocity.copy(escapeDir.multiplyScalar(0.2))
+              setTimeout(() => { if (fish && fish.userData) fish.userData.isStartled = false }, 3000)
+            }
+          }, 13000)
         }
       }
     })
@@ -487,19 +522,19 @@ import { spawnBubble } from './interactions.js'
       }
     })
     
-    // Check hit with rocks and pure seaweeds (not fruit trees)
-    if (rockArray) {
-      rockArray.forEach((rock, rIndex) => {
-        if (!rock) return
-        const hitRadius = 1.0 * rock.scale.x
-        if (bullet.position.distanceTo(rock.position) < hitRadius) {
+    // Check hit with fruits
+    if (fruitArray) {
+      fruitArray.forEach((fruit, rIndex) => {
+        if (!fruit) return
+        const hitRadius = 1.0 * fruit.scale.x
+        if (bullet.position.distanceTo(fruit.position) < hitRadius) {
           playSound('pop')
           bullet.userData.life = 100
-          gsap.to(rock.scale, {
+          gsap.to(fruit.scale, {
             x: 0, y: 0, z: 0, duration: 0.2,
-            onComplete: () => scene.remove(rock)
+            onComplete: () => scene.remove(fruit)
           })
-          rockArray[rIndex] = null
+          fruitArray[rIndex] = null
         }
       })
     }
@@ -560,21 +595,50 @@ import { spawnBubble } from './interactions.js'
   for (let i = bubbleArray.length - 1; i >= 0; i--) {
     if (!bubbleArray[i]) bubbleArray.splice(i, 1)
   }
-  if (rockArray) {
-    for (let i = rockArray.length - 1; i >= 0; i--) {
-      if (!rockArray[i]) rockArray.splice(i, 1)
+  if (fruitArray) {
+    for (let i = fruitArray.length - 1; i >= 0; i--) {
+      if (!fruitArray[i]) fruitArray.splice(i, 1)
     }
   }
   for (let i = seaweedArray.length - 1; i >= 0; i--) {
     if (!seaweedArray[i]) seaweedArray.splice(i, 1)
   }
   
-  // Maintain exactly 12 items (6 mushrooms + 6 fruit trees) in the scene
-  if (gameState === 'playing' && mushroomArray.length < 12) {
-    // 50% chance to spawn a mushroom, 50% chance to spawn a fruit tree
-    const spawnType = Math.random() < 0.5 ? 'mushroom' : 'tree'
+  // Maintain environment items
+  if (gameState === 'playing') {
+    let normalMushroomCount = 0
+    let treeCount = 0
+    mushroomArray.forEach(m => {
+      if (m) {
+        if (m.userData.isFruitTree) treeCount++
+        else normalMushroomCount++
+      }
+    })
     
-    if (spawnType === 'mushroom') {
+    let seaweedCount = 0
+    seaweedArray.forEach(sw => {
+      if (sw && !sw.userData.isFruitTree) seaweedCount++
+    })
+    
+    let fruitCount = 0
+    if (fruitArray) {
+      fruitArray.forEach(f => {
+        if (f) fruitCount++
+      })
+    }
+    
+    // Respawn logic
+    if (normalMushroomCount < 6 || treeCount < 6 || seaweedCount < 15 || fruitCount < 10) {
+      // Pick what to spawn based on what's missing
+      let spawnCandidates = []
+      if (normalMushroomCount < 6) spawnCandidates.push('mushroom')
+      if (treeCount < 6) spawnCandidates.push('tree')
+      if (seaweedCount < 15) spawnCandidates.push('seaweed')
+      if (fruitCount < 10) spawnCandidates.push('fruit')
+      
+      const spawnType = spawnCandidates[Math.floor(Math.random() * spawnCandidates.length)]
+      
+      if (spawnType === 'mushroom') {
       import('./mushroom.js').then(({ spawnMushroom }) => {
         const group = new THREE.Group()
         const scale = 0.5 + Math.random() * 1.5
