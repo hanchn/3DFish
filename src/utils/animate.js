@@ -245,9 +245,9 @@ export function animateGame(
       let centerZ = 0
       
       if (isPlaying && !isFleeingPlayer) {
-        // Dynamic density: 5 fish per 5m radius
+        // Dynamic density: 5 fish per 20m radius
         // The fewer the fish, the smaller the radius, keeping them close to the player
-        const dynamicRadius = Math.max(5, Math.sqrt(fishArray.length / 5) * 5.0)
+        const dynamicRadius = Math.max(20, Math.sqrt(fishArray.length / 5) * 20.0)
         boundsX = dynamicRadius
         boundsZ = dynamicRadius
         
