@@ -37,7 +37,9 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import gsap from 'gsap'
 import { playSound } from './utils/audio.js'
-import { generateFishTexture, createFishModel } from './utils/models.js'
+import { createFishModel } from './utils/models.js'
+import { createEnvironment } from './utils/environment.js'
+import { spawnMushroom, spawnInitialMushrooms } from './utils/mushroom.js'
 
 const canvasContainer = ref(null)
 const gameState = ref('start') // 'start' or 'playing'
@@ -90,9 +92,30 @@ function stopMove() {
 
 onMounted(() => {
   initThree()
-  createEnvironment()
+  
+  // We wrap variables in objects/refs so the external function can update them
+  const waterSurfacePlaneRef = { value: waterSurfacePlane }
+  const tableRef = { value: table }
+  const tankGroupRef = { value: tankGroup }
+  const waterRef = { value: water }
+  
+  createEnvironment(
+    scene,
+    rockArray,
+    seaweedArray,
+    waterSurfacePlaneRef,
+    tableRef,
+    tankGroupRef,
+    waterRef
+  )
+  
+  waterSurfacePlane = waterSurfacePlaneRef.value
+  table = tableRef.value
+  tankGroup = tankGroupRef.value
+  water = waterRef.value
+  
   createFishes(40) // create 40 fishes initially
-  spawnInitialMushrooms() // spawn initial mushrooms based on fish count
+  spawnInitialMushrooms(scene, camera, mushroomArray, gameState.value, fishCount.value) // spawn initial mushrooms based on fish count
   animate()
   
   window.addEventListener('resize', onWindowResize)
@@ -135,10 +158,10 @@ function onKeyDown(event) {
       moveState.right = true
       break
     case 'KeyJ':
-      spawnMushroom(false, false) // normal mushroom
+      spawnMushroom(scene, camera, mushroomArray, gameState.value, false, false) // normal mushroom
       break
     case 'KeyK':
-      spawnMushroom(false, true) // poisonous mushroom
+      spawnMushroom(scene, camera, mushroomArray, gameState.value, false, true) // poisonous mushroom
       break
     case 'KeyL':
       dropFoodAtCenter() // drop fish food
@@ -272,185 +295,8 @@ function createWaterGun() {
   scene.add(camera)
 }
 
-function createEnvironment() {
-  // Table
-  const tableGeometry = new THREE.BoxGeometry(30, 1, 20)
-  const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 })
-  table = new THREE.Mesh(tableGeometry, tableMaterial)
-  table.position.y = -0.5
-  table.receiveShadow = true
-  scene.add(table)
-  
-  // Tank (Glass)
-  const tankWidth = 20
-  const tankHeight = 10
-  const tankDepth = 12
-  
-  const glassMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xaaaaaa,
-    metalness: 0.1,
-    roughness: 0.1,
-    transmission: 0.9,
-    transparent: true,
-    opacity: 0.5,
-    side: THREE.DoubleSide
-  })
-  
-  // Create 4 walls and bottom
-  tankGroup = new THREE.Group()
-  
-  const bottom = new THREE.Mesh(new THREE.BoxGeometry(tankWidth, 0.2, tankDepth), glassMaterial)
-  bottom.position.y = 0.1
-  tankGroup.add(bottom)
-  
-  const back = new THREE.Mesh(new THREE.BoxGeometry(tankWidth, tankHeight, 0.2), glassMaterial)
-  back.position.set(0, tankHeight/2, -tankDepth/2)
-  tankGroup.add(back)
-  
-  const front = new THREE.Mesh(new THREE.BoxGeometry(tankWidth, tankHeight, 0.2), glassMaterial)
-  front.position.set(0, tankHeight/2, tankDepth/2)
-  tankGroup.add(front)
-  
-  const left = new THREE.Mesh(new THREE.BoxGeometry(0.2, tankHeight, tankDepth), glassMaterial)
-  left.position.set(-tankWidth/2, tankHeight/2, 0)
-  tankGroup.add(left)
-  
-  const right = new THREE.Mesh(new THREE.BoxGeometry(0.2, tankHeight, tankDepth), glassMaterial)
-  right.position.set(tankWidth/2, tankHeight/2, 0)
-  tankGroup.add(right)
-  
-  scene.add(tankGroup)
-  
-  // Water
-  const waterGeometry = new THREE.BoxGeometry(tankWidth - 0.4, tankHeight - 1, tankDepth - 0.4)
-  const waterMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0x00aaff,
-    transmission: 0.8,
-    transparent: true,
-    opacity: 0.6,
-    roughness: 0.2
-  })
-  water = new THREE.Mesh(waterGeometry, waterMaterial)
-  water.position.y = (tankHeight - 1) / 2 + 0.2
-  scene.add(water)
-  
-  // Invisible plane for raycasting food drops
-  const planeGeo = new THREE.PlaneGeometry(100, 100)
-  const planeMat = new THREE.MeshBasicMaterial({ visible: false })
-  waterSurfacePlane = new THREE.Mesh(planeGeo, planeMat)
-  waterSurfacePlane.rotation.x = -Math.PI / 2
-  waterSurfacePlane.position.y = 8 // Drop food from height 8
-  scene.add(waterSurfacePlane)
-  
-  // Rocks
-  const rockMaterial = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 })
-  for(let i=0; i<30; i++) {
-    const rSize = 0.5 + Math.random() * 1.5
-    const rockGeo = new THREE.DodecahedronGeometry(rSize, 1)
-    const rock = new THREE.Mesh(rockGeo, rockMaterial)
-    
-    // Initial position inside the tank
-    const initX = (Math.random() - 0.5) * (tankWidth - 2)
-    const initZ = (Math.random() - 0.5) * (tankDepth - 2)
-    rock.position.set(initX, rSize/2 + 0.2, initZ)
-    
-    // Store target expanded position for game start
-    rock.userData.targetPosition = new THREE.Vector3(
-      (Math.random() - 0.5) * 60,
-      rSize/2 + 0.2,
-      (Math.random() - 0.5) * 60
-    )
-    
-    rock.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0)
-    rock.castShadow = true
-    scene.add(rock)
-    rockArray.push(rock)
-  }
+// The createEnvironment has been imported from utils
 
-  // Seaweeds
-  for(let i=0; i<40; i++) {
-    spawnSeaweed(true)
-  }
-}
-
-function spawnSeaweed(isInitial = false) {
-  const isTriangle = Math.random() > 0.5
-  let seaweedGeo
-  let seaweed
-  
-  const seaweedMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x228b22, // Forest Green
-    roughness: 0.6,
-    side: THREE.DoubleSide
-  })
-  
-  const triSeaweedMaterial = new THREE.MeshStandardMaterial({
-    color: 0x32cd32, // Lime Green
-    roughness: 0.5,
-    side: THREE.DoubleSide
-  })
-  
-  if (isTriangle) {
-    const height = 1.5 + Math.random() * 2
-    seaweedGeo = new THREE.ConeGeometry(0.4 + Math.random() * 0.2, height, 3)
-    seaweedGeo.translate(0, height / 2, 0)
-    seaweed = new THREE.Mesh(seaweedGeo, triSeaweedMaterial)
-  } else {
-    const segments = 6
-    const height = 2 + Math.random() * 5
-    const radius = 0.15 + Math.random() * 0.1
-    seaweedGeo = new THREE.CylinderGeometry(0.01, radius, height, 5, segments)
-    seaweedGeo.translate(0, height / 2, 0)
-    seaweed = new THREE.Mesh(seaweedGeo, seaweedMaterial)
-  }
-  
-  const isPlaying = gameState.value === 'playing'
-  const boundsX = isPlaying ? 25 : 8
-  const boundsZ = isPlaying ? 25 : 4
-  
-  if (isInitial) {
-    const tankWidth = 20
-    const tankDepth = 12
-    seaweed.position.set(
-      (Math.random() - 0.5) * (tankWidth - 4),
-      0.2,
-      (Math.random() - 0.5) * (tankDepth - 4)
-    )
-    seaweed.userData.targetPosition = new THREE.Vector3(
-      (Math.random() - 0.5) * 60,
-      0.2,
-      (Math.random() - 0.5) * 60
-    )
-  } else {
-    seaweed.position.set(
-      (Math.random() - 0.5) * boundsX * 2,
-      0.2,
-      (Math.random() - 0.5) * boundsZ * 2
-    )
-    seaweed.scale.set(0.01, 0.01, 0.01)
-    gsap.to(seaweed.scale, {
-      x: 1, y: 1, z: 1,
-      duration: 2,
-      ease: 'elastic.out(1, 0.5)'
-    })
-  }
-  
-  seaweed.userData.originalVertices = []
-  seaweed.userData.isTriangle = isTriangle
-  const positionAttribute = seaweedGeo.attributes.position
-  for (let j = 0; j < positionAttribute.count; j++) {
-    seaweed.userData.originalVertices.push({
-      x: positionAttribute.getX(j),
-      y: positionAttribute.getY(j),
-      z: positionAttribute.getZ(j)
-    })
-  }
-  
-  seaweed.userData.swayOffset = Math.random() * Math.PI * 2
-  seaweed.castShadow = true
-  scene.add(seaweed)
-  seaweedArray.push(seaweed)
-}
 
 // Function to generate a procedural texture with patterns
 function generateFishTexture(baseColorHex, type) {
