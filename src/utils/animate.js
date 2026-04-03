@@ -86,12 +86,12 @@ export function animateGame(
     let targetVec = null
     let targetSpeed = currentMaxSpeed
     
-    // Hunger logic
+    // Hunger logic: fish becomes hungry after 20 seconds
     const hungerTime = now - fish.userData.lastEatenTime
-    const canEat = hungerTime > fish.userData.hungerInterval
+    const canEat = hungerTime > 20000 // Fixed 20 seconds cooldown
     
-    // Faint if starving
-    if (!fish.userData.isStunned && hungerTime > fish.userData.hungerInterval + 30000) {
+    // Faint if starving (hungry for too long, say another 30s)
+    if (!fish.userData.isStunned && hungerTime > 50000) {
       fish.userData.isStunned = true
       fish.userData.isStartled = false
       fish.userData.hitCount = 0
@@ -142,6 +142,7 @@ export function animateGame(
       // Check player food
       if (foodArray.length > 0) {
         foodArray.forEach((f, idx) => {
+          if (!f) return
           const dist = fish.position.distanceTo(f.position)
           if (dist < minDist) {
             minDist = dist
@@ -314,10 +315,12 @@ export function animateGame(
   
   // Animate Food
   foodArray.forEach((food, idx) => {
-    food.position.y -= delta * 1.5
-    if (food.position.y < 0.5) {
-      scene.remove(food)
-      foodArray[idx] = null
+    if (!food) return
+    if (food.position.y > 0.1) {
+      food.position.y -= delta * 1.5 // sink
+      if (food.position.y <= 0.1) {
+        food.position.y = 0.1 // Stay on the floor
+      }
     }
   })
   

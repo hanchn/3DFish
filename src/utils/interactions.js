@@ -138,18 +138,12 @@ export function dropFoodAtCenter(
   // Limit max height so it doesn't spawn above water too far
   if (targetPos.y > 8) targetPos.y = 8
   
-  for(let i = 0; i < 5; i++) {
-    const foodGeo = new THREE.SphereGeometry(0.15, 8, 8)
-    const foodMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 })
-    const food = new THREE.Mesh(foodGeo, foodMat)
-    
-    // Spread slightly
-    food.position.copy(targetPos)
-    food.position.x += (Math.random() - 0.5) * 1.5
-    food.position.y += (Math.random() - 0.5) * 0.5
-    food.position.z += (Math.random() - 0.5) * 1.5
-    
-    scene.add(food)
-    foodArray.push(food)
-  }
+  const foodGeo = new THREE.SphereGeometry(0.15, 8, 8)
+  const foodMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9 })
+  const food = new THREE.Mesh(foodGeo, foodMat)
+  
+  food.position.copy(targetPos)
+  
+  scene.add(food)
+  foodArray.push(food)
 }
