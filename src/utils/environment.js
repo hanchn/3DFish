@@ -174,4 +174,116 @@ export function createEnvironment(
     scene.add(seaweed)
     seaweedArray.push(seaweed)
   }
+
+  // Add Fruit Trees as static environment objects
+  createFruitTrees(scene, seaweedArray, tankWidth, tankDepth)
+}
+
+function createFruitTrees(scene, seaweedArray, tankWidth, tankDepth) {
+  const treeTypes = ['lemon', 'watermelon', 'apple']
+  
+  for (let i = 0; i < 6; i++) { // 2 of each type
+    const type = treeTypes[i % 3]
+    const group = new THREE.Group()
+    
+    let trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+    let canopyMat, fruitGeo, fruitMat, fruitCount, fruitRadius, yOffset
+    
+    if (type === 'lemon') {
+      canopyMat = new THREE.MeshStandardMaterial({ color: 0x228b22 })
+      fruitGeo = new THREE.SphereGeometry(0.2, 8, 8)
+      fruitGeo.scale(0.8, 1.2, 0.8)
+      fruitMat = new THREE.MeshStandardMaterial({ color: '#fff700', roughness: 0.6 })
+      fruitCount = 8
+      fruitRadius = 1.5
+      yOffset = 1.5
+    } else if (type === 'watermelon') {
+      trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 })
+      canopyMat = new THREE.MeshStandardMaterial({ color: 0x006400 })
+      fruitGeo = new THREE.SphereGeometry(0.4, 16, 16)
+      fruitGeo.scale(1, 1.2, 1)
+      // Simple green material since we don't have the procedural texture generator here
+      fruitMat = new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.7 }) 
+      fruitCount = 5
+      fruitRadius = 2.0
+      yOffset = 2.0
+    } else if (type === 'apple') {
+      canopyMat = new THREE.MeshStandardMaterial({ color: 0x32cd32 })
+      fruitGeo = new THREE.SphereGeometry(0.25, 16, 16)
+      fruitMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.4 })
+      fruitCount = 10
+      fruitRadius = 1.8
+      yOffset = 1.8
+    }
+    
+    // Trunk
+    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, yOffset * 1.5, 8)
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat)
+    trunk.position.y = yOffset * 0.75
+    
+    // Canopy
+    const canopyGeo = type === 'apple' ? new THREE.DodecahedronGeometry(fruitRadius, 1) : new THREE.SphereGeometry(fruitRadius, 16, 16)
+    const canopy = new THREE.Mesh(canopyGeo, canopyMat)
+    canopy.position.y = yOffset * 1.5
+    
+    group.add(trunk, canopy)
+    
+    // Fruits
+    for (let j = 0; j < fruitCount; j++) {
+      const fruit = new THREE.Mesh(fruitGeo, fruitMat)
+      const phi = type === 'watermelon' ? Math.random() * Math.PI * 0.8 : Math.random() * Math.PI
+      const theta = Math.random() * Math.PI * 2
+      fruit.position.set(
+        fruitRadius * Math.sin(phi) * Math.cos(theta),
+        yOffset * 1.5 + fruitRadius * Math.cos(phi),
+        fruitRadius * Math.sin(phi) * Math.sin(theta)
+      )
+      fruit.rotation.set(Math.random(), Math.random(), Math.random())
+      group.add(fruit)
+    }
+    
+    // Position
+    const initX = (Math.random() - 0.5) * (tankWidth - 4)
+    const initZ = (Math.random() - 0.5) * (tankDepth - 4)
+    group.position.set(initX, 0, initZ)
+    
+    group.userData.targetPosition = new THREE.Vector3(
+      (Math.random() - 0.5) * 60,
+      0,
+      (Math.random() - 0.5) * 60
+    )
+    
+    group.children.forEach(c => c.castShadow = true)
+    
+    // Store original vertices of canopy to make it sway like seaweed
+    group.userData.originalVertices = []
+    group.userData.isTriangle = false
+    const posAttr = canopyGeo.attributes.position
+    for (let j = 0; j < posAttr.count; j++) {
+      group.userData.originalVertices.push({
+        x: posAttr.getX(j),
+        y: posAttr.getY(j),
+        z: posAttr.getZ(j)
+      })
+    }
+    group.userData.swayOffset = Math.random() * Math.PI * 2
+    
+    // Replace the canopy geometry with a new one that we can animate
+    const animCanopyGeo = canopyGeo.clone()
+    canopy.geometry = animCanopyGeo
+    // Pass reference to the specific geometry we want to animate
+    group.geometry = animCanopyGeo 
+    
+    // Add custom flag to identify fruit trees as edible food
+    group.userData.isFruitTree = true
+    group.userData.isPoisonous = false // Fruit trees are safe to eat
+    
+    scene.add(group)
+    seaweedArray.push(group)
+    
+    // Add to mushroom array so fish can eat them
+    if (typeof window !== 'undefined' && window.mushroomArrayRef) {
+      window.mushroomArrayRef.push(group)
+    }
+  }
 }

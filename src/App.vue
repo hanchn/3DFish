@@ -22,7 +22,7 @@
             按 J 键生成普通蘑菇，K 键生成毒蘑菇<br>
             按 L 键投喂鱼食<br>
             按键盘 W A S D 移动<br>
-            鼠标瞄准鱼，按空格键发射水弹<br>
+            鼠标瞄准，左键点击或按空格键发射水弹<br>
             按 Shift 键下降
           </div>
         </transition>
@@ -118,8 +118,8 @@ onMounted(() => {
   water = waterRef.value
   
   const fishCountRef = { value: fishCount.value }
-  // Create exactly 7 fishes initially, one for each type
-  createFishes(7, scene, fishArray, fishCountRef)
+  // Create exactly 10 fishes initially, one for each type
+  createFishes(10, scene, fishArray, fishCountRef)
   fishCount.value = fishCountRef.value
   
   spawnInitialMushrooms(scene, camera, mushroomArray, gameState.value, fishCount.value) // spawn initial mushrooms based on fish count
@@ -131,8 +131,9 @@ onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
   
-  // Add mousemove listener for aiming
+  // Add mouse listeners for aiming and shooting
   window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mousedown', onMouseDown)
 })
 
 onBeforeUnmount(() => {
@@ -140,6 +141,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('mousemove', onMouseMove)
+  window.removeEventListener('mousedown', onMouseDown)
   
   cancelAnimationFrame(animationFrameId)
   if (renderer) renderer.dispose()
@@ -415,6 +417,15 @@ function onMouseMove(event) {
   }
 }
 
+function onMouseDown(event) {
+  if (gameState.value !== 'playing') return
+  
+  // Only shoot on left click (button 0)
+  if (event.button === 0) {
+    shootWaterBullet(gameState.value, waterGun, camera, scene, waterBullets, mouse, raycaster, waterSurfacePlane)
+  }
+}
+
 
 
 function animate() {
@@ -427,11 +438,14 @@ function animate() {
   animateGame(
     delta, now, time, gameState.value, camera, scene, controls,
     waterGun, moveState, fishArray, { value: fishCount.value },
-    foodArray, mushroomArray, seaweedArray, bubbleArray, waterBullets
+    foodArray, mushroomArray, seaweedArray, bubbleArray, waterBullets, rockArray
   )
   
   // Need to manually keep reactive ref in sync
   fishCount.value = fishArray.filter(f => !f.userData.dead).length
+  
+  // Make mushroomArray accessible to environment generator
+  window.mushroomArrayRef = mushroomArray
   
   if (renderer && scene && camera) {
     renderer.render(scene, camera)

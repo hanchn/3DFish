@@ -4,24 +4,25 @@ import { playSound } from './audio.js'
 import { spawnBabyFishes } from './fishes.js'
 import { spawnBubble } from './interactions.js'
 
-export function animateGame(
-  delta,
-  now,
-  time,
-  gameState,
-  camera,
-  scene,
-  controls,
-  waterGun,
-  moveState,
-  fishArray,
-  fishCountRef,
-  foodArray,
-  mushroomArray,
-  seaweedArray,
-  bubbleArray,
-  waterBullets
-) {
+  export function animateGame(
+    delta,
+    now,
+    time,
+    gameState,
+    camera,
+    scene,
+    controls,
+    waterGun,
+    moveState,
+    fishArray,
+    fishCountRef,
+    foodArray,
+    mushroomArray,
+    seaweedArray,
+    bubbleArray,
+    waterBullets,
+    rockArray
+  ) {
   // Update controls
   controls.update()
   
@@ -140,7 +141,14 @@ export function animateGame(
       if (targetItem) {
         targetVec = targetItem.position.clone().sub(fish.position)
         // Adjust targeting slightly above the mushroom base so fish doesn't dive into the floor
-        if (targetType === 'mushroom') targetVec.y += 0.2 
+        // For fruit trees, target the canopy
+        if (targetType === 'mushroom') {
+          if (targetItem.userData.isFruitTree) {
+             targetVec.y += 1.5 
+          } else {
+             targetVec.y += 0.2 
+          }
+        }
         targetVec.normalize()
         
         targetSpeed = currentMaxSpeed * (targetType === 'playerFood' ? 2.5 : 1.2)
@@ -389,11 +397,16 @@ export function animateGame(
     }
   })
   
+  // Need to pass rockArray and seaweedArray correctly, assuming they are accessible
+  // Actually rockArray is not passed into animateGame by default, we need to update the signature in App.vue and animate.js
+  // Let's modify the bullet logic inside animateGame
+  
   waterBullets.forEach((bullet, index) => {
     if (!bullet) return
     bullet.position.add(bullet.userData.velocity)
     bullet.userData.life += delta
     
+    // Check hit with fishes
     fishArray.forEach(fish => {
       if (fish.userData.dead) return
       const hitRadius = 1.0 * fish.scale.x
@@ -456,10 +469,14 @@ export function animateGame(
       }
     })
     
+    // Check hit with mushrooms (only normal/poisonous mushrooms, not fruit trees)
     mushroomArray.forEach((m, mIndex) => {
-      if (!m) return
+      if (!m || m.userData.isFruitTree) return // Fruit trees are now handled in seaweedArray
+      
       const hitRadius = 0.6 * m.scale.x
-      if (bullet.position.distanceTo(m.position) < hitRadius) {
+      const targetPos = m.position.clone()
+      
+      if (bullet.position.distanceTo(targetPos) < hitRadius) {
         playSound('pop')
         bullet.userData.life = 100
         gsap.to(m.scale, {
@@ -467,6 +484,57 @@ export function animateGame(
           onComplete: () => scene.remove(m)
         })
         mushroomArray[mIndex] = null
+      }
+    })
+    
+    // Check hit with rocks and pure seaweeds (not fruit trees)
+    if (rockArray) {
+      rockArray.forEach((rock, rIndex) => {
+        if (!rock) return
+        const hitRadius = 1.0 * rock.scale.x
+        if (bullet.position.distanceTo(rock.position) < hitRadius) {
+          playSound('pop')
+          bullet.userData.life = 100
+          gsap.to(rock.scale, {
+            x: 0, y: 0, z: 0, duration: 0.2,
+            onComplete: () => scene.remove(rock)
+          })
+          rockArray[rIndex] = null
+        }
+      })
+    }
+    
+    seaweedArray.forEach((sw, sIndex) => {
+      if (!sw) return
+      
+      let hitRadius = 1.0
+      let targetPos = sw.position.clone()
+      
+      // If it's a fruit tree, give it a bigger hitbox and aim higher
+      if (sw.userData.isFruitTree) {
+        hitRadius = 2.0
+        targetPos.y += 1.5
+      } else {
+        // Normal seaweed
+        targetPos.y += 1.0
+      }
+      
+      if (bullet.position.distanceTo(targetPos) < hitRadius) {
+        playSound('pop')
+        bullet.userData.life = 100
+        gsap.to(sw.scale, {
+          x: 0, y: 0, z: 0, duration: 0.2,
+          onComplete: () => scene.remove(sw)
+        })
+        seaweedArray[sIndex] = null
+        
+        // If it's a fruit tree, also remove it from mushroomArray so fish stop eating it
+        if (sw.userData.isFruitTree) {
+          const mIndex = mushroomArray.indexOf(sw)
+          if (mIndex > -1) {
+            mushroomArray[mIndex] = null
+          }
+        }
       }
     })
     
@@ -492,9 +560,190 @@ export function animateGame(
   for (let i = bubbleArray.length - 1; i >= 0; i--) {
     if (!bubbleArray[i]) bubbleArray.splice(i, 1)
   }
+  if (rockArray) {
+    for (let i = rockArray.length - 1; i >= 0; i--) {
+      if (!rockArray[i]) rockArray.splice(i, 1)
+    }
+  }
+  for (let i = seaweedArray.length - 1; i >= 0; i--) {
+    if (!seaweedArray[i]) seaweedArray.splice(i, 1)
+  }
+  
+  // Maintain exactly 12 items (6 mushrooms + 6 fruit trees) in the scene
+  if (gameState === 'playing' && mushroomArray.length < 12) {
+    // 50% chance to spawn a mushroom, 50% chance to spawn a fruit tree
+    const spawnType = Math.random() < 0.5 ? 'mushroom' : 'tree'
+    
+    if (spawnType === 'mushroom') {
+      import('./mushroom.js').then(({ spawnMushroom }) => {
+        const group = new THREE.Group()
+        const scale = 0.5 + Math.random() * 1.5
+        // 50% chance for normal, 50% chance for poisonous
+        const isPoisonous = Math.random() < 0.5
+        group.userData.isPoisonous = isPoisonous
+        
+        // Stem
+        const stemGeo = new THREE.CylinderGeometry(0.2, 0.3, 0.6, 16)
+        const stemMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.9 })
+        const stem = new THREE.Mesh(stemGeo, stemMat)
+        stem.position.y = 0.3
+        stem.castShadow = true
+        
+        // Cap
+        const capGeo = new THREE.SphereGeometry(0.6, 16, 16, 0, Math.PI*2, 0, Math.PI/2)
+        let capColor, texType
+        if (isPoisonous) {
+          capColor = 0xff0000 // Red means poisonous
+          texType = 'mushroom'
+        } else {
+          const safeColors = [0x8a2be2, 0x1e90ff, 0x32cd32, 0xffa500, 0x9932cc] 
+          capColor = safeColors[Math.floor(Math.random() * safeColors.length)]
+          texType = 'safe_mushroom'
+        }
+        
+        import('./models.js').then(({ generateFishTexture }) => {
+          const tex = generateFishTexture(capColor, texType)
+          const capMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 })
+          const cap = new THREE.Mesh(capGeo, capMat)
+          cap.position.y = 0.6
+          cap.scale.set(1, 0.8, 1)
+          cap.castShadow = true
+          
+          // Eyes
+          const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8)
+          const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
+          const eyeR = new THREE.Mesh(eyeGeo, eyeMat)
+          eyeR.position.set(0.1, 0.4, 0.25)
+          const eyeL = new THREE.Mesh(eyeGeo, eyeMat)
+          eyeL.position.set(-0.1, 0.4, 0.25)
+          
+          group.add(stem, cap, eyeR, eyeL)
+          
+          // Random position in the wide map
+          group.position.set(
+            (Math.random() - 0.5) * 90,
+            0.1,
+            (Math.random() - 0.5) * 90
+          )
+          group.rotation.y = Math.random() * Math.PI * 2
+          
+          group.scale.set(0.01, 0.01, 0.01)
+          scene.add(group)
+          mushroomArray.push(group)
+          
+          gsap.to(group.scale, {
+            x: scale,
+            y: scale,
+            z: scale,
+            duration: 2,
+            ease: 'elastic.out(1, 0.5)'
+          })
+        })
+      })
+    } else {
+      // Spawn a fruit tree
+      import('./environment.js').then(({ createFruitTrees }) => {
+        // Create 1 tree. createFruitTrees currently spawns 6, so we need a targeted spawn
+        const treeTypes = ['lemon', 'watermelon', 'apple']
+        const type = treeTypes[Math.floor(Math.random() * 3)]
+        const group = new THREE.Group()
+        group.userData.isFruitTree = true
+        group.userData.isPoisonous = false // Fruit trees are safe to eat
+        
+        let trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 })
+        let canopyMat, fruitGeo, fruitMat, fruitCount, fruitRadius, yOffset
+        
+        if (type === 'lemon') {
+          canopyMat = new THREE.MeshStandardMaterial({ color: 0x228b22 })
+          fruitGeo = new THREE.SphereGeometry(0.2, 8, 8)
+          fruitGeo.scale(0.8, 1.2, 0.8)
+          fruitMat = new THREE.MeshStandardMaterial({ color: '#fff700', roughness: 0.6 })
+          fruitCount = 8
+          fruitRadius = 1.5
+          yOffset = 1.5
+        } else if (type === 'watermelon') {
+          trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 })
+          canopyMat = new THREE.MeshStandardMaterial({ color: 0x006400 })
+          fruitGeo = new THREE.SphereGeometry(0.4, 16, 16)
+          fruitGeo.scale(1, 1.2, 1)
+          fruitMat = new THREE.MeshStandardMaterial({ color: 0x228b22, roughness: 0.7 }) 
+          fruitCount = 5
+          fruitRadius = 2.0
+          yOffset = 2.0
+        } else if (type === 'apple') {
+          canopyMat = new THREE.MeshStandardMaterial({ color: 0x32cd32 })
+          fruitGeo = new THREE.SphereGeometry(0.25, 16, 16)
+          fruitMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.4 })
+          fruitCount = 10
+          fruitRadius = 1.8
+          yOffset = 1.8
+        }
+        
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, yOffset * 1.5, 8)
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat)
+        trunk.position.y = yOffset * 0.75
+        
+        const canopyGeo = type === 'apple' ? new THREE.DodecahedronGeometry(fruitRadius, 1) : new THREE.SphereGeometry(fruitRadius, 16, 16)
+        const canopy = new THREE.Mesh(canopyGeo, canopyMat)
+        canopy.position.y = yOffset * 1.5
+        
+        group.add(trunk, canopy)
+        
+        for (let j = 0; j < fruitCount; j++) {
+          const fruit = new THREE.Mesh(fruitGeo, fruitMat)
+          const phi = type === 'watermelon' ? Math.random() * Math.PI * 0.8 : Math.random() * Math.PI
+          const theta = Math.random() * Math.PI * 2
+          fruit.position.set(
+            fruitRadius * Math.sin(phi) * Math.cos(theta),
+            yOffset * 1.5 + fruitRadius * Math.cos(phi),
+            fruitRadius * Math.sin(phi) * Math.sin(theta)
+          )
+          fruit.rotation.set(Math.random(), Math.random(), Math.random())
+          group.add(fruit)
+        }
+        
+        group.position.set(
+          (Math.random() - 0.5) * 90,
+          0,
+          (Math.random() - 0.5) * 90
+        )
+        
+        group.children.forEach(c => c.castShadow = true)
+        
+        group.userData.originalVertices = []
+        group.userData.isTriangle = false
+        const posAttr = canopyGeo.attributes.position
+        for (let j = 0; j < posAttr.count; j++) {
+          group.userData.originalVertices.push({
+            x: posAttr.getX(j),
+            y: posAttr.getY(j),
+            z: posAttr.getZ(j)
+          })
+        }
+        group.userData.swayOffset = Math.random() * Math.PI * 2
+        
+        const animCanopyGeo = canopyGeo.clone()
+        canopy.geometry = animCanopyGeo
+        group.geometry = animCanopyGeo 
+        
+        group.scale.set(0.01, 0.01, 0.01)
+        scene.add(group)
+        seaweedArray.push(group)
+        mushroomArray.push(group)
+        
+        gsap.to(group.scale, {
+          x: 1,
+          y: 1,
+          z: 1,
+          duration: 2,
+          ease: 'elastic.out(1, 0.5)'
+        })
+      })
+    }
+  }
   
   seaweedArray.forEach(seaweed => {
-    if (!seaweed) return
+    if (!seaweed || !seaweed.geometry) return
     const positions = seaweed.geometry.attributes.position
     const origVerts = seaweed.userData.originalVertices
     const swayFactor = seaweed.userData.isTriangle ? 0.2 : 0.5

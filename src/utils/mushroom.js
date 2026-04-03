@@ -118,9 +118,10 @@ export function spawnInitialMushrooms(
   gameState,
   fishCount
 ) {
-  const targetCount = Math.max(1, Math.floor(fishCount / 10))
+  // Always spawn exactly 6 mushrooms initially
+  const targetCount = 6
   for (let i = 0; i < targetCount; i++) {
-    // Initial spawn mixes them up
+    // Initial spawn mixes them up (roughly half normal, half poisonous)
     spawnMushroom(scene, camera, mushroomArray, gameState, true, Math.random() < 0.5)
   }
 }

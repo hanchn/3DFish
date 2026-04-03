@@ -91,22 +91,11 @@ export function shootWaterBullet(
   gunTip.applyMatrix4(waterGun.matrixWorld)
   bullet.position.copy(gunTip)
   
-  // Determine direction based on mouse position
+  // Use Raycaster to find the target direction based on mouse position
   raycaster.setFromCamera(mouse, camera)
   
-  let targetPoint = new THREE.Vector3()
-  const intersects = raycaster.intersectObject(waterSurfacePlane)
-  
-  if (intersects.length > 0) {
-    targetPoint = intersects[0].point
-    // Aim a bit lower into the water
-    targetPoint.y -= 5
-  } else {
-    // Fallback: shoot straight ahead
-    raycaster.ray.at(20, targetPoint)
-  }
-  
-  const direction = new THREE.Vector3().subVectors(targetPoint, gunTip).normalize()
+  // Set the direction directly from the raycaster's ray
+  const direction = raycaster.ray.direction.clone()
   
   // Add some bullet logic
   bullet.userData.velocity = direction.multiplyScalar(0.8) // Fast bullet

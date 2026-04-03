@@ -67,6 +67,47 @@ export function generateFishTexture(baseColorHex, type) {
         context.strokeRect(i*50, j*50, 40, 40)
       }
     }
+  } else if (type === 'watermelon_fruit') {
+    // Watermelon stripes
+    context.fillStyle = '#228b22' // Dark green
+    context.fillRect(0, 0, 256, 256)
+    context.fillStyle = '#32cd32' // Light green stripes
+    for(let i=0; i<10; i++) {
+      context.beginPath()
+      context.moveTo(i*25.6, 0)
+      context.lineTo(i*25.6 + 5, 0)
+      context.lineTo(i*25.6 + 15, 256)
+      context.lineTo(i*25.6 + 10, 256)
+      context.fill()
+    }
+  } else if (type === 'pig') {
+    context.fillStyle = '#ffc0cb' // Pink base
+    context.fillRect(0, 0, 256, 256)
+    context.fillStyle = '#ffb6c1' // Lighter pink spots
+    for(let i=0; i<15; i++) {
+      context.beginPath()
+      context.arc(Math.random()*256, Math.random()*256, Math.random()*15 + 10, 0, Math.PI*2)
+      context.fill()
+    }
+  } else if (type === 'whale') {
+    // Whale: dark blue/grey top, white belly
+    context.fillStyle = '#1c395c'
+    context.fillRect(0, 0, 256, 256)
+  } else if (type === 'bird') {
+    // Bird: feathery pattern
+    context.fillStyle = '#' + baseColor.getHexString()
+    context.fillRect(0, 0, 256, 256)
+    context.strokeStyle = '#' + patternColor.getHexString()
+    context.lineWidth = 2
+    for(let i=0; i<50; i++) {
+      context.beginPath()
+      const x = Math.random()*256
+      const y = Math.random()*256
+      context.moveTo(x, y)
+      context.lineTo(x-10, y+10)
+      context.lineTo(x+10, y+10)
+      context.stroke()
+    }
   } else if (patternType === 'spots') {
     for(let i=0; i<30; i++) {
       context.beginPath()
@@ -95,6 +136,12 @@ export function createFishModel(type, color) {
   if (type === 'jellyfish') baseSpeed = 0.002
   if (type === 'shark') baseSpeed = 0.02
   if (type === 'cow') baseSpeed = 0.004
+  if (type === 'whale') baseSpeed = 0.003
+  if (type === 'pig') baseSpeed = 0.005
+  if (type === 'bird') baseSpeed = 0.018
+  if (type === 'lemon') baseSpeed = 0.012
+  if (type === 'watermelon') baseSpeed = 0.010
+  if (type === 'apple') baseSpeed = 0.011
 
   const group = new THREE.Group()
   group.userData.baseSpeed = baseSpeed
@@ -254,6 +301,78 @@ export function createFishModel(type, color) {
     tentacles.position.y = -0.7
     
     bodyGroup.add(dome)
+  } else if (type === 'whale') {
+    // Whale body
+    const topGeo = new THREE.CylinderGeometry(0.8, 0.4, 3, 16)
+    topGeo.rotateX(Math.PI / 2)
+    const topMesh = new THREE.Mesh(topGeo, mainMat)
+    
+    const bottomGeo = new THREE.CylinderGeometry(0.8, 0.4, 3, 16, 1, false, Math.PI, Math.PI)
+    bottomGeo.rotateX(Math.PI / 2)
+    bottomGeo.scale(1, 0.5, 1)
+    const bottomMesh = new THREE.Mesh(bottomGeo, bellyMat)
+    
+    // Flipper
+    const flipperGeo = new THREE.BoxGeometry(2.5, 0.1, 0.6)
+    const flipper = new THREE.Mesh(flipperGeo, mainMat)
+    flipper.position.set(0, 0, 0.5)
+    
+    // Blowhole water spout
+    const spoutGeo = new THREE.ConeGeometry(0.2, 0.8, 8)
+    const spoutMat = new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 })
+    const spout = new THREE.Mesh(spoutGeo, spoutMat)
+    spout.position.set(0, 1.2, 0.8)
+    
+    bodyGroup.add(topMesh, bottomMesh, flipper, spout)
+    
+    // Huge Tail
+    tailGeo = new THREE.BoxGeometry(2.5, 0.2, 0.8)
+  } else if (type === 'pig') {
+    // Pig Body
+    const bodyGeo = new THREE.BoxGeometry(1.2, 1, 1.8)
+    const bodyMesh = new THREE.Mesh(bodyGeo, mainMat)
+    
+    // Snout
+    const snoutGeo = new THREE.BoxGeometry(0.6, 0.4, 0.4)
+    const snoutMat = new THREE.MeshStandardMaterial({ color: 0xff69b4 }) // Hot pink snout
+    const snout = new THREE.Mesh(snoutGeo, snoutMat)
+    snout.position.set(0, 0.1, 1)
+    
+    // Ears
+    const earGeo = new THREE.ConeGeometry(0.2, 0.4, 4)
+    const earL = new THREE.Mesh(earGeo, mainMat)
+    earL.position.set(-0.4, 0.7, 0.8)
+    earL.rotation.z = Math.PI / 6
+    const earR = new THREE.Mesh(earGeo, mainMat)
+    earR.position.set(0.4, 0.7, 0.8)
+    earR.rotation.z = -Math.PI / 6
+    
+    bodyGroup.add(bodyMesh, snout, earL, earR)
+    
+    // Curly tail
+    tailGeo = new THREE.TorusGeometry(0.15, 0.05, 8, 12, Math.PI * 1.5)
+  } else if (type === 'bird') {
+    // Bird Body
+    const bodyGeo = new THREE.SphereGeometry(0.7, 16, 16)
+    bodyGeo.scale(0.8, 0.9, 1.2)
+    const bodyMesh = new THREE.Mesh(bodyGeo, mainMat)
+    
+    // Beak
+    const beakGeo = new THREE.ConeGeometry(0.2, 0.6, 4)
+    beakGeo.rotateX(Math.PI / 2)
+    const beakMat = new THREE.MeshStandardMaterial({ color: 0xffa500 }) // Orange beak
+    const beak = new THREE.Mesh(beakGeo, beakMat)
+    beak.position.set(0, 0.2, 1.1)
+    
+    // Wings
+    const wingGeo = new THREE.BoxGeometry(2.2, 0.1, 0.8)
+    const wings = new THREE.Mesh(wingGeo, mainMat)
+    wings.position.set(0, 0.1, 0)
+    
+    bodyGroup.add(bodyMesh, beak, wings)
+    
+    // Tail feathers
+    tailGeo = new THREE.BoxGeometry(0.8, 0.1, 0.8)
   }
   
   // Enable shadows for body parts
@@ -272,8 +391,12 @@ export function createFishModel(type, color) {
       tail.position.z = -2.0
     } else if (type === 'turtle') {
       tail.position.z = -1.2
-    } else if (type === 'cow') {
+    } else if (type === 'cow' || type === 'pig') {
       tail.position.z = -0.9
+    } else if (type === 'whale') {
+      tail.position.z = -1.8
+    } else if (type === 'bird') {
+      tail.position.z = -1.0
     } else if (type === 'jellyfish') {
       tail.material = new THREE.MeshPhysicalMaterial({
         color: color,
@@ -295,7 +418,7 @@ export function createFishModel(type, color) {
   }
   
   // Eyes
-  if (type !== 'jellyfish') {
+  if (type !== 'jellyfish' && type !== 'lemon' && type !== 'watermelon' && type !== 'apple') {
     const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8)
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
     const eyeR = new THREE.Mesh(eyeGeo, eyeMat)
@@ -304,12 +427,18 @@ export function createFishModel(type, color) {
     if (type === 'shark') {
       eyeR.position.set(0.4, 0.2, 1.5)
       eyeL.position.set(-0.4, 0.2, 1.5)
+    } else if (type === 'whale') {
+      eyeR.position.set(0.5, 0.1, 1.0)
+      eyeL.position.set(-0.5, 0.1, 1.0)
     } else if (type === 'turtle') {
       eyeR.position.set(0.2, 0.1, 1.4)
       eyeL.position.set(-0.2, 0.1, 1.4)
-    } else if (type === 'cow') {
+    } else if (type === 'cow' || type === 'pig') {
       eyeR.position.set(0.3, 0.5, 1.6)
       eyeL.position.set(-0.3, 0.5, 1.6)
+    } else if (type === 'bird') {
+      eyeR.position.set(0.3, 0.3, 0.8)
+      eyeL.position.set(-0.3, 0.3, 0.8)
     } else {
       eyeR.position.set(type === 'flat' ? 0.2 : 0.4, 0.1, 0.5)
       eyeL.position.set(type === 'flat' ? -0.2 : -0.4, 0.1, 0.5)

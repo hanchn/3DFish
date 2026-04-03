@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { createFishModel } from './models.js'
 
-export const fishTypes = ['wide', 'flat', 'long', 'turtle', 'jellyfish', 'shark', 'cow']
+export const fishTypes = ['wide', 'flat', 'long', 'turtle', 'jellyfish', 'shark', 'cow', 'whale', 'pig', 'bird']
 export const colors = [0xff9900, 0xff3333, 0x3399ff, 0xffcc00, 0xcc33ff, 0x33cc33]
 
 export function createFishes(count, scene, fishArray, fishCountRef) {
