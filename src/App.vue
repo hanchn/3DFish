@@ -363,18 +363,7 @@ function startGame() {
     }
   })
   
-  // Dynamic mushroom spawner interval to keep ratio roughly 1/10
-  setInterval(() => {
-    if (gameState.value === 'playing') {
-      const activeMushrooms = mushroomArray.filter(m => m !== null).length
-      const targetMushrooms = Math.max(1, Math.floor(fishCount.value / 10))
-      
-      // If we are short of mushrooms due to fish reproduction, spawn one
-      if (activeMushrooms < targetMushrooms) {
-        spawnMushroom()
-      }
-    }
-  }, 5000)
+  // Dynamic mushroom spawner interval has been removed.
   
   // Animate camera zooming into the tank
   gsap.to(camera.position, {
