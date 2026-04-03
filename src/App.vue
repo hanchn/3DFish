@@ -4,6 +4,7 @@
     <nav class="game-nav" v-if="$route.name !== 'home' || showNav">
       <router-link to="/" class="nav-btn" :class="{ active: $route.name === 'home' }">🐟 3DFish</router-link>
       <router-link to="/rabbit" class="nav-btn" :class="{ active: $route.name === 'rabbit' }">🐰 拔萝卜</router-link>
+      <router-link to="/cow" class="nav-btn" :class="{ active: $route.name === 'cow' }">🐄 挤奶</router-link>
       <button @click="showNav = !showNav" class="toggle-nav-btn">{{ showNav ? '隐藏菜单' : '显示菜单' }}</button>
     </nav>
     <div v-else class="hidden-nav-trigger" @mouseenter="showNav = true">
