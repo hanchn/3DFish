@@ -137,9 +137,9 @@ export function animateGame(
       let targetItem = null
       let targetType = ''
       let itemIndex = -1
-      let minDist = Infinity
+      let minDist = 15 // Only care about food within 15 units (near the fish)
       
-      // Check player food
+      // Find the absolute closest food item (player food or mushroom)
       if (foodArray.length > 0) {
         foodArray.forEach((f, idx) => {
           if (!f) return
@@ -153,23 +153,16 @@ export function animateGame(
         })
       }
       
-      if (minDist > 35) targetItem = null
-      
-      // Check mushrooms
-      if (!targetItem) {
-        minDist = Infinity
-        mushroomArray.forEach((m, idx) => {
-          if (!m) return
-          const dist = fish.position.distanceTo(m.position)
-          if (dist < minDist) {
-            minDist = dist
-            targetItem = m
-            targetType = 'mushroom'
-            itemIndex = idx
-          }
-        })
-        if (minDist > 30) targetItem = null 
-      }
+      mushroomArray.forEach((m, idx) => {
+        if (!m) return
+        const dist = fish.position.distanceTo(m.position)
+        if (dist < minDist) {
+          minDist = dist
+          targetItem = m
+          targetType = 'mushroom'
+          itemIndex = idx
+        }
+      })
       
       if (targetItem) {
         targetVec = targetItem.position.clone().sub(fish.position)
