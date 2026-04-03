@@ -178,17 +178,26 @@ export function animateGame(
             })
             // The 2s disappearance logic is now handled when the fish hits the bottom
           } else {
-            fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
-            if (fish.userData.itemsEaten >= 2) {
+            // Only player food counts towards breeding
+            if (targetType === 'playerFood') {
+              fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
+              if (fish.userData.itemsEaten >= 2) {
+                gsap.to(fish.scale, {
+                  x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
+                  duration: 0.3, ease: "back.out(1.7)"
+                })
+                spawnBabyFishes(fish, 2, scene, fishArray, { value: fishCountRef.value })
+                fish.userData.itemsEaten = 0
+              } else {
+                gsap.to(fish.scale, {
+                  x: fish.scale.x * 1.10, y: fish.scale.y * 1.10, z: fish.scale.z * 1.10,
+                  duration: 0.3, ease: "back.out(1.7)"
+                })
+              }
+            } else {
+              // Just a small growth for eating normal mushrooms, no breeding progress
               gsap.to(fish.scale, {
                 x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
-                duration: 0.3, ease: "back.out(1.7)"
-              })
-              spawnBabyFishes(fish, 2, scene, fishArray, fishCountRef)
-              fish.userData.itemsEaten = 0
-            } else {
-              gsap.to(fish.scale, {
-                x: fish.scale.x * 1.10, y: fish.scale.y * 1.10, z: fish.scale.z * 1.10,
                 duration: 0.3, ease: "back.out(1.7)"
               })
             }
