@@ -178,26 +178,37 @@ export function animateGame(
             })
             // The 2s disappearance logic is now handled when the fish hits the bottom
           } else {
-            // Only player food counts towards breeding
-            if (targetType === 'playerFood') {
-              fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
-              if (fish.userData.itemsEaten >= 2) {
-                gsap.to(fish.scale, {
-                  x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
-                  duration: 0.3, ease: "back.out(1.7)"
-                })
-                spawnBabyFishes(fish, 2, scene, fishArray, { value: fishCountRef.value })
-                fish.userData.itemsEaten = 0
-              } else {
-                gsap.to(fish.scale, {
-                  x: fish.scale.x * 1.10, y: fish.scale.y * 1.10, z: fish.scale.z * 1.10,
-                  duration: 0.3, ease: "back.out(1.7)"
+            // Both player food and normal mushrooms count towards breeding
+            fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
+            if (fish.userData.itemsEaten >= 2) {
+              gsap.to(fish.scale, {
+                x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
+                duration: 0.3, ease: "back.out(1.7)"
+              })
+              
+              spawnBabyFishes(fish, 2, scene, fishArray, { value: fishCountRef.value })
+              fish.userData.itemsEaten = 0
+              
+              // Increment breed count
+              fish.userData.breedCount = (fish.userData.breedCount || 0) + 1
+              
+              // Die after 3 breeding cycles
+              if (fish.userData.breedCount >= 3) {
+                fish.userData.isStunned = true
+                fish.userData.isStartled = false
+                fish.userData.isOldAgeDead = true // Mark as dead from old age
+                fish.userData.hitCount = 0
+                fish.userData.velocity.set(0, -0.05, 0)
+                
+                gsap.to(fish.rotation, {
+                  z: Math.PI,
+                  duration: 0.5,
+                  ease: 'power2.out'
                 })
               }
             } else {
-              // Just a small growth for eating normal mushrooms, no breeding progress
               gsap.to(fish.scale, {
-                x: fish.scale.x * 1.05, y: fish.scale.y * 1.05, z: fish.scale.z * 1.05,
+                x: fish.scale.x * 1.10, y: fish.scale.y * 1.10, z: fish.scale.z * 1.10,
                 duration: 0.3, ease: "back.out(1.7)"
               })
             }
@@ -234,9 +245,9 @@ export function animateGame(
       let centerZ = 0
       
       if (isPlaying && !isFleeingPlayer) {
-        // Dynamic density: 5 fish per 2m radius
+        // Dynamic density: 5 fish per 5m radius
         // The fewer the fish, the smaller the radius, keeping them close to the player
-        const dynamicRadius = Math.max(2, Math.sqrt(fishArray.length / 5) * 2.0)
+        const dynamicRadius = Math.max(5, Math.sqrt(fishArray.length / 5) * 5.0)
         boundsX = dynamicRadius
         boundsZ = dynamicRadius
         
@@ -289,7 +300,7 @@ export function animateGame(
       fish.position.y = 1.0
       fish.userData.velocity.set(0, 0, 0)
       
-      if (fish.userData.isPoisonedDead && !fish.userData.disappearing) {
+      if ((fish.userData.isPoisonedDead || fish.userData.isOldAgeDead) && !fish.userData.disappearing) {
         fish.userData.disappearing = true
         setTimeout(() => {
           if (!fish || !fish.parent) return
