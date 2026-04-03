@@ -47,7 +47,7 @@ const mouse = new THREE.Vector2()
 const groundSize = 60
 
 // Truck state
-let truckState = 'idle' // 'idle', 'driving_in', 'loading', 'driving_away'
+let truckState = 'idle' // 'idle', 'driving_in', 'loading', 'driving_away', 'driving_back'
 let targetedPigForTruck = null
 
 // Audio
@@ -409,8 +409,6 @@ function createApple(position, type) {
 }
 
 function onClick(event) {
-  if (isDragging) return // 如果在拖拽，就不触发点击生成苹果
-  
   initAudio()
   
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
@@ -418,12 +416,97 @@ function onClick(event) {
   
   raycaster.setFromCamera(mouse, camera)
   
-  // Only click ground to drop apples
-  const intersects = raycaster.intersectObject(ground)
-  
-  if (intersects.length > 0) {
-    createApple(intersects[0].point, selectedFruit.value)
+  // 1. 先检测是否点到了猪
+  const pigIntersects = raycaster.intersectObjects(pigs, true)
+  if (pigIntersects.length > 0 && truckState === 'idle' && pigs.length >= 2) {
+    let object = pigIntersects[0].object
+    while (object.parent && object.userData.type !== 'pig') {
+      if (object.parent.type === 'Scene') break
+      object = object.parent
+    }
+    
+    if (object && object.userData.type === 'pig') {
+      // 召唤卡车来装这只猪
+      callTruckForPig(object)
+      return // 点了猪就不扔苹果了
+    }
   }
+  
+  // 2. 如果没点到猪，且点到了草地，则扔苹果
+  const groundIntersects = raycaster.intersectObject(ground)
+  
+  if (groundIntersects.length > 0) {
+    createApple(groundIntersects[0].point, selectedFruit.value)
+  }
+}
+
+function callTruckForPig(pig) {
+  truckState = 'driving_in'
+  targetedPigForTruck = pig
+  pig.userData.state = 'waiting_for_truck' // 猪停止活动等待上车
+  
+  // 卡车从远处开过来停在猪附近的马路上
+  truck.position.set(20, 0, -100) // Start from far away
+  
+  // 找一个和猪Z轴平行的马路位置停车
+  const stopZ = pig.position.z
+  
+  gsap.to(truck.position, {
+    z: stopZ,
+    duration: 2,
+    ease: "power2.out",
+    onComplete: () => {
+      truckState = 'loading'
+      loadPigIntoTruck(pig)
+    }
+  })
+}
+
+function loadPigIntoTruck(pig) {
+  // 把猪“吸”进车厢
+  gsap.to(pig.position, {
+    x: truck.position.x,
+    y: truck.position.y + 3, // 高于车斗一点
+    z: truck.position.z - 1.5,
+    duration: 1,
+    ease: "power1.inOut",
+    onComplete: () => {
+      // 正式装入车厢
+      truck.add(pig)
+      pig.position.set(0, 2.5, -1.5)
+      pig.rotation.set(0, Math.PI, 0)
+      
+      const idx = pigs.indexOf(pig)
+      if (idx > -1) pigs.splice(idx, 1)
+      
+      // 开走
+      truckState = 'driving_away'
+      playOinkSound()
+      
+      gsap.to(truck.position, {
+        z: 100, // 开向远方
+        duration: 3,
+        ease: "power2.in",
+        onComplete: () => {
+          truck.remove(pig)
+          
+          // 卡车从远方反向开回来（空车）
+          truck.position.z = -100
+          truckState = 'driving_back'
+          
+          gsap.to(truck.position, {
+            z: 0,
+            duration: 3,
+            ease: "power2.out",
+            onComplete: () => {
+              truckState = 'idle'
+              targetedPigForTruck = null
+            }
+          })
+        }
+      })
+    }
+  })
 }
 
 function animate() {
@@ -545,149 +628,17 @@ function animate() {
   renderer.render(scene, camera)
 }
 
-function onMouseDown(event) {
-  // Check if clicked on a pig
+function onMouseMove(event) {
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
   
   raycaster.setFromCamera(mouse, camera)
   const intersects = raycaster.intersectObjects(pigs, true)
-  
-  if (intersects.length > 0) {
-    let object = intersects[0].object
-    // Find the root group of the pig
-    while (object.parent && object.userData.type !== 'pig') {
-      if (object.parent.type === 'Scene') break
-      object = object.parent
-    }
-    
-    if (object && object.userData.type === 'pig') {
-      isDragging = true
-      draggedPig = object
-      draggedPig.userData.state = 'dragged'
-      
-      // Stop current animations if eating
-      gsap.killTweensOf(draggedPig.scale)
-      draggedPig.scale.set(2.5, 2.5, 2.5) // Reset scale
-      
-      playOinkSound() // Squeal when picked up
-      document.body.style.cursor = 'grabbing'
-    }
-  }
-}
-
-function onMouseMove(event) {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
-  
-  if (isDragging && draggedPig) {
-    raycaster.setFromCamera(mouse, camera)
-    
-    // Find intersection with the drag plane
-    const targetPosition = new THREE.Vector3()
-    raycaster.ray.intersectPlane(dragPlane, targetPosition)
-    
-    if (targetPosition) {
-      // Elevate pig while dragging
-      draggedPig.position.set(targetPosition.x, 5, targetPosition.z)
-      
-      // Wiggle while being dragged
-      draggedPig.rotation.z = Math.sin(Date.now() * 0.02) * 0.2
-      draggedPig.rotation.x = Math.cos(Date.now() * 0.02) * 0.2
-    }
+  if (intersects.length > 0 && truckState === 'idle' && pigs.length >= 2) {
+    document.body.style.cursor = 'pointer' // 提示可以点击猪
   } else {
-    // Hover cursor logic
-    raycaster.setFromCamera(mouse, camera)
-    const intersects = raycaster.intersectObjects(pigs, true)
-    if (intersects.length > 0) {
-      document.body.style.cursor = 'grab'
-    } else {
-      document.body.style.cursor = 'default'
-    }
-  }
-}
-
-function onMouseUp(event) {
-  if (isDragging && draggedPig) {
-    isDragging = false
     document.body.style.cursor = 'default'
-    
-    // Reset rotation
-    draggedPig.rotation.z = 0
-    draggedPig.rotation.x = 0
-    
-    // Check if dropped into truck bed
-    raycaster.setFromCamera(mouse, camera)
-    // Check intersection with truck bed hitbox
-    const truckHitbox = truck.children.find(c => c.userData.isTruckBed)
-    
-    if (truckState === 'idle' && truckHitbox) {
-      const intersects = raycaster.intersectObject(truckHitbox)
-      
-      if (intersects.length > 0) {
-        // Dropped in truck!
-        handlePigInTruck(draggedPig)
-        draggedPig = null
-        return
-      }
-    }
-    
-    // Dropped on ground
-    gsap.to(draggedPig.position, {
-      y: 2, // ground level
-      duration: 0.3,
-      ease: "bounce.out",
-      onComplete: () => {
-        if (draggedPig) {
-          draggedPig.userData.state = 'idle'
-          draggedPig.userData.target = getRandomTarget()
-          draggedPig = null
-        }
-      }
-    })
   }
-}
-
-function handlePigInTruck(pig) {
-  // Move pig into truck bed
-  truck.add(pig)
-  
-  // Local position relative to truck
-  pig.position.set(0, 2.5, -1.5)
-  pig.rotation.set(0, Math.PI, 0) // Face backwards
-  pig.userData.state = 'in_truck'
-  
-  // Remove from main pigs array
-  const idx = pigs.indexOf(pig)
-  if (idx > -1) pigs.splice(idx, 1)
-  
-  // Drive truck away
-  truckState = 'driving_away'
-  playOinkSound() // Happy departing sound
-  
-  gsap.to(truck.position, {
-    z: 100, // Drive far away down the road
-    duration: 3,
-    ease: "power2.in",
-    onComplete: () => {
-      // Remove pig completely
-      truck.remove(pig)
-      
-      // Reset truck position for return
-      truck.position.z = -100
-      truckState = 'driving_back'
-      
-      // Drive back empty
-      gsap.to(truck.position, {
-        z: 0,
-        duration: 3,
-        ease: "power2.out",
-        onComplete: () => {
-          truckState = 'idle'
-        }
-      })
-    }
-  })
 }
 </script>
 
