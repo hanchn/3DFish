@@ -36,6 +36,8 @@ import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import gsap from 'gsap'
+import { playSound } from './utils/audio.js'
+import { generateFishTexture, createFishModel } from './utils/models.js'
 
 const canvasContainer = ref(null)
 const gameState = ref('start') // 'start' or 'playing'
@@ -58,123 +60,6 @@ let bubbleArray = []
 let floor
 let waterGun
 let waterBullets = []
-
-// Sound Effects Synthesizer
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-
-function playSound(type) {
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume()
-  }
-  
-  const osc = audioCtx.createOscillator()
-  const gainNode = audioCtx.createGain()
-  
-  osc.connect(gainNode)
-  gainNode.connect(audioCtx.destination)
-  
-  const now = audioCtx.currentTime
-  
-  if (type === 'splash') {
-    // Water drop / plop sound
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(400, now)
-    osc.frequency.exponentialRampToValueAtTime(800, now + 0.1)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.5, now + 0.02)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3)
-    
-    osc.start(now)
-    osc.stop(now + 0.3)
-  } else if (type === 'hit') {
-    // Hit sound (short, high pitch blip)
-    osc.type = 'square'
-    osc.frequency.setValueAtTime(600, now)
-    osc.frequency.exponentialRampToValueAtTime(150, now + 0.1)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
-    
-    osc.start(now)
-    osc.stop(now + 0.15)
-  } else if (type === 'pop') {
-    // Mushroom hit / bubble pop sound
-    osc.type = 'triangle'
-    osc.frequency.setValueAtTime(200, now)
-    osc.frequency.exponentialRampToValueAtTime(800, now + 0.15)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.4, now + 0.02)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
-    
-    osc.start(now)
-    osc.stop(now + 0.15)
-  } else if (type === 'moo') {
-    // Cow 'moo' sound simulation
-    osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(150, now)
-    osc.frequency.linearRampToValueAtTime(120, now + 0.5)
-    osc.frequency.exponentialRampToValueAtTime(80, now + 1.0)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.5, now + 0.2)
-    gainNode.gain.linearRampToValueAtTime(0.4, now + 0.8)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1.2)
-    
-    osc.start(now)
-    osc.stop(now + 1.2)
-  } else if (type === 'hit_jellyfish') {
-    // Electric zap sound
-    osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(800, now)
-    osc.frequency.linearRampToValueAtTime(100, now + 0.1)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1)
-    
-    osc.start(now)
-    osc.stop(now + 0.1)
-  } else if (type === 'hit_shark') {
-    // Deep heavy thud
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(100, now)
-    osc.frequency.exponentialRampToValueAtTime(30, now + 0.3)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.8, now + 0.05)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4)
-    
-    osc.start(now)
-    osc.stop(now + 0.4)
-  } else if (type === 'hit_turtle') {
-    // Hard shell knock (wood block sound)
-    osc.type = 'triangle'
-    osc.frequency.setValueAtTime(400, now)
-    osc.frequency.exponentialRampToValueAtTime(200, now + 0.1)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.6, now + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1)
-    
-    osc.start(now)
-    osc.stop(now + 0.1)
-  } else if (type === 'hit_small') {
-    // High pitch plink for normal small fishes
-    osc.type = 'square'
-    osc.frequency.setValueAtTime(800, now)
-    osc.frequency.exponentialRampToValueAtTime(400, now + 0.1)
-    
-    gainNode.gain.setValueAtTime(0, now)
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01)
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1)
-    
-    osc.start(now)
-    osc.stop(now + 0.1)
-  }
-}
 
 // Colors and types
 const fishTypes = ['wide', 'flat', 'long', 'turtle', 'jellyfish', 'shark', 'cow']
@@ -1005,6 +890,108 @@ function spawnMushroom(isInitial = false, forcePoisonous = null) {
   group.userData.targetScale = scale
 }
 
+function spawnMushroom(isInitial = false, forcePoisonous = null) {
+  const group = new THREE.Group()
+  const scale = 0.5 + Math.random() * 1.5
+  
+  let isPoisonous = false
+  if (forcePoisonous !== null) {
+    isPoisonous = forcePoisonous
+  } else {
+    isPoisonous = Math.random() < 0.5
+  }
+  
+  group.userData.isPoisonous = isPoisonous
+  
+  // Stem
+  const stemGeo = new THREE.CylinderGeometry(0.2, 0.3, 0.6, 16)
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.9 })
+  const stem = new THREE.Mesh(stemGeo, stemMat)
+  stem.position.y = 0.3
+  stem.castShadow = true
+  
+  // Cap
+  const capGeo = new THREE.SphereGeometry(0.6, 16, 16, 0, Math.PI*2, 0, Math.PI/2)
+  let capColor, texType
+  
+  if (isPoisonous) {
+    capColor = 0xff0000 // Red
+    texType = 'mushroom' // Has white spots
+  } else {
+    const safeColors = [0x8a2be2, 0x1e90ff, 0x32cd32, 0xffa500, 0x9932cc] 
+    capColor = safeColors[Math.floor(Math.random() * safeColors.length)]
+    texType = 'safe_mushroom' // No distinct spots
+  }
+  
+  const tex = generateFishTexture(capColor, texType)
+  const capMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 })
+  const cap = new THREE.Mesh(capGeo, capMat)
+  cap.position.y = 0.6
+  cap.scale.set(1, 0.8, 1)
+  cap.castShadow = true
+  
+  // Eyes on stem
+  const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8)
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat)
+  eyeR.position.set(0.1, 0.4, 0.25)
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat)
+  eyeL.position.set(-0.1, 0.4, 0.25)
+  
+  group.add(stem, cap, eyeR, eyeL)
+  
+  // Random position (bounds based on game state)
+  const isPlaying = gameState.value === 'playing'
+  // Make mushrooms spawn over a very wide area (45 units)
+  const boundsX = isPlaying ? 45 : 8
+  const boundsZ = isPlaying ? 45 : 4
+  
+  if (isInitial) {
+    // Initial position inside the small tank
+    group.position.set(
+      (Math.random() - 0.5) * 16,
+      0.1, // on the floor
+      (Math.random() - 0.5) * 8
+    )
+    // Target position for when game starts (spread wide to 90 units total span)
+    group.userData.targetPosition = new THREE.Vector3(
+      (Math.random() - 0.5) * 90,
+      0.1,
+      (Math.random() - 0.5) * 90
+    )
+  } else {
+    // Spawn directly in front of the player (camera)
+    const viewDirection = new THREE.Vector3()
+    camera.getWorldDirection(viewDirection)
+    viewDirection.y = 0 // Keep it on the same horizontal plane
+    viewDirection.normalize()
+    
+    // Spawn 10 units in front of the camera, dropping to the floor
+    const targetPos = camera.position.clone()
+    targetPos.add(viewDirection.multiplyScalar(10))
+    targetPos.y = 0.1 // Set to floor level
+    
+    group.position.copy(targetPos)
+  }
+  
+  group.rotation.y = Math.random() * Math.PI * 2
+  
+  // Scale animation (grow from ground)
+  group.scale.set(0.01, 0.01, 0.01)
+  scene.add(group)
+  mushroomArray.push(group)
+  
+  gsap.to(group.scale, {
+    x: scale,
+    y: scale,
+    z: scale,
+    duration: 2,
+    ease: 'elastic.out(1, 0.5)'
+  })
+  
+  group.userData.targetScale = scale
+}
+
 function spawnBubble(pos) {
   const bubbleGeo = new THREE.SphereGeometry(0.05 + Math.random()*0.1, 8, 8)
   const bubbleMat = new THREE.MeshPhysicalMaterial({
@@ -1720,23 +1707,6 @@ function animate() {
       foodArray = foodArray.filter(f => f !== food)
     }
   })
-  
-  // Animate Worms
-  wormArray.forEach((worm, idx) => {
-    if (!worm) return
-    worm.position.y -= delta * 1.0 // sink slower than food
-    
-    // Wiggle animation
-    worm.children.forEach((mesh, i) => {
-      mesh.position.x = Math.sin(i * 1.5 + time * 5) * 0.05
-    })
-    
-    if (worm.position.y < 0.5) {
-      scene.remove(worm)
-      wormArray[idx] = null
-    }
-  })
-  wormArray = wormArray.filter(w => w !== null)
   
   // Animate Mushrooms (emit bubbles)
   const time = clock.getElapsedTime()
