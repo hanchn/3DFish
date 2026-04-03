@@ -40,6 +40,8 @@ import { playSound } from './utils/audio.js'
 import { createFishModel } from './utils/models.js'
 import { createEnvironment } from './utils/environment.js'
 import { spawnMushroom, spawnInitialMushrooms } from './utils/mushroom.js'
+import { createFishes, spawnBabyFishes } from './utils/fishes.js'
+import { createWaterGun, spawnBubble, shootWaterBullet, dropFoodAtCenter } from './utils/interactions.js'
 
 const canvasContainer = ref(null)
 const gameState = ref('start') // 'start' or 'playing'
@@ -164,10 +166,10 @@ function onKeyDown(event) {
       spawnMushroom(scene, camera, mushroomArray, gameState.value, false, true) // poisonous mushroom
       break
     case 'KeyL':
-      dropFoodAtCenter() // drop fish food
+      dropFoodAtCenter(gameState.value, camera, scene, foodArray) // drop fish food
       break
     case 'Space':
-      shootWaterBullet()
+      shootWaterBullet(gameState.value, waterGun, camera, scene, waterBullets, mouse, raycaster, waterSurfacePlane)
       break
     case 'ShiftLeft':
     case 'ShiftRight':
@@ -252,7 +254,9 @@ function initThree() {
   clock = new THREE.Clock()
   
   // Water Gun Model (Attached to camera)
-  createWaterGun()
+  const waterGunRef = { value: waterGun }
+  createWaterGun(camera, scene, waterGunRef)
+  waterGun = waterGunRef.value
 }
 
 function createWaterGun() {
