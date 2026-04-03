@@ -3,12 +3,15 @@
     <div ref="container" class="canvas-container"></div>
     <div id="ui-layer">
       <div class="score-board">
-        拔出的萝卜：{{ score }}
+        吃掉的果蔬：{{ score }}<br>
+        兔子体重：{{ weight.toFixed(1) }}kg
       </div>
       <div class="controls-hint">
         🐰 兔子拔萝卜<br>
         [鼠标左键点击] 地面让兔子跳过去<br>
-        [鼠标左键点击] 萝卜，兔子会自动跳过去并拔出萝卜
+        [鼠标左键点击] 萝卜，拔出它！<br>
+        <span style="color: #ffd700">特别大的萝卜需要点击多次才能拔出！</span><br>
+        拔出后再次点击萝卜可以吃掉得分！
       </div>
     </div>
   </div>
@@ -21,6 +24,7 @@ import gsap from 'gsap'
 
 const container = ref(null)
 const score = ref(0)
+const weight = ref(5.0) // initial weight is 5.0kg
 
 let scene, camera, renderer, animationFrameId
 let rabbitGroup, carrotsArray = []
@@ -161,50 +165,115 @@ function createRabbit() {
 }
 
 function createCarrotField() {
-  const carrotGeo = new THREE.ConeGeometry(0.3, 1.2, 8)
-  carrotGeo.rotateX(Math.PI) // Point down
-  const carrotMat = new THREE.MeshStandardMaterial({ color: 0xff8c00, roughness: 0.6 }) // Orange
+  const cropTypes = ['carrot', 'cabbage', 'strawberry', 'apple', 'pear', 'banana', 'grape', 'peach']
   
-  const leafGeo = new THREE.ConeGeometry(0.2, 0.8, 4)
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x32cd32 }) // Green
-  
-  // Plant 40 carrots randomly
+  // Base materials
+  const carrotMat = new THREE.MeshStandardMaterial({ color: 0xff8c00, roughness: 0.6 })
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x32cd32 })
+  const cabbageMat = new THREE.MeshStandardMaterial({ color: 0x90ee90, roughness: 0.8 })
+  const strawberryMat = new THREE.MeshStandardMaterial({ color: 0xff0033, roughness: 0.4 })
+  const appleMat = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.3 })
+  const pearMat = new THREE.MeshStandardMaterial({ color: 0xd1e231, roughness: 0.4 })
+  const bananaMat = new THREE.MeshStandardMaterial({ color: 0xffe135, roughness: 0.5 })
+  const grapeMat = new THREE.MeshStandardMaterial({ color: 0x800080, roughness: 0.2 })
+  const peachMat = new THREE.MeshStandardMaterial({ color: 0xffdab9, roughness: 0.5 })
+
+  // Plant 40 crops randomly
   for (let i = 0; i < 40; i++) {
-    const carrotGroup = new THREE.Group()
+    const cropGroup = new THREE.Group()
+    const type = cropTypes[Math.floor(Math.random() * cropTypes.length)]
     
-    const root = new THREE.Mesh(carrotGeo, carrotMat)
-    // Bury it in the ground, only top shows
-    root.position.y = -0.3
+    if (type === 'carrot') {
+      const root = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.2, 8), carrotMat)
+      root.rotation.x = Math.PI
+      root.position.y = -0.3
+      const leaf1 = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.8, 4), leafMat)
+      leaf1.position.set(0, 0.5, 0)
+      leaf1.rotation.x = Math.PI / 8
+      const leaf2 = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.8, 4), leafMat)
+      leaf2.position.set(0, 0.5, 0)
+      leaf2.rotation.x = -Math.PI / 8
+      cropGroup.add(root, leaf1, leaf2)
+    } else if (type === 'cabbage') {
+      const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5, 1), cabbageMat)
+      body.position.y = 0.2
+      body.scale.set(1, 0.8, 1)
+      cropGroup.add(body)
+    } else if (type === 'strawberry') {
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.8, 16), strawberryMat)
+      body.rotation.x = Math.PI
+      body.position.y = 0.2
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0, 0.1, 8), leafMat)
+      cap.position.y = 0.6
+      cropGroup.add(body, cap)
+    } else if (type === 'apple') {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), appleMat)
+      body.position.y = 0.3
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.2), new THREE.MeshStandardMaterial({color: 0x8b4513}))
+      stem.position.y = 0.75
+      cropGroup.add(body, stem)
+    } else if (type === 'pear') {
+      const bodyGeo = new THREE.SphereGeometry(0.4, 16, 16)
+      bodyGeo.translate(0, -0.1, 0)
+      const topGeo = new THREE.SphereGeometry(0.25, 16, 16)
+      topGeo.translate(0, 0.3, 0)
+      const body = new THREE.Mesh(bodyGeo, pearMat)
+      const top = new THREE.Mesh(topGeo, pearMat)
+      body.position.y = 0.3
+      top.position.y = 0.3
+      cropGroup.add(body, top)
+    } else if (type === 'banana') {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.2, 8), bananaMat)
+      body.rotation.z = Math.PI / 4
+      body.position.y = 0.4
+      // Curve it slightly by using a bent tube or just leave it straight for simplicity
+      cropGroup.add(body)
+    } else if (type === 'grape') {
+      const grapeGroup = new THREE.Group()
+      for(let j=0; j<10; j++) {
+        const berry = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), grapeMat)
+        berry.position.set((Math.random()-0.5)*0.3, Math.random()*0.5, (Math.random()-0.5)*0.3)
+        grapeGroup.add(berry)
+      }
+      grapeGroup.position.y = 0.2
+      cropGroup.add(grapeGroup)
+    } else if (type === 'peach') {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), peachMat)
+      body.position.y = 0.3
+      // A little cleft
+      body.scale.set(1, 0.95, 1.05)
+      cropGroup.add(body)
+    }
     
-    const leaf1 = new THREE.Mesh(leafGeo, leafMat)
-    leaf1.position.set(0, 0.5, 0)
-    leaf1.rotation.x = Math.PI / 8
-    
-    const leaf2 = new THREE.Mesh(leafGeo, leafMat)
-    leaf2.position.set(0, 0.5, 0)
-    leaf2.rotation.x = -Math.PI / 8
-    
-    carrotGroup.add(root, leaf1, leaf2)
-    
+    // Position
     const x = (Math.random() - 0.5) * 40
     const z = (Math.random() - 0.5) * 40
     
-    // Don't spawn exactly on the rabbit
     if (Math.abs(x) < 2 && Math.abs(z) < 2) continue
     
-    carrotGroup.position.set(x, 0, z)
+    cropGroup.position.set(x, 0, z)
     
-    // Random slight tilt to look natural
-    carrotGroup.rotation.x = (Math.random() - 0.5) * 0.2
-    carrotGroup.rotation.z = (Math.random() - 0.5) * 0.2
+    // Random scale for huge crops
+    const scale = 0.5 + Math.random() * 3.0
+    cropGroup.scale.set(scale, scale, scale)
     
-    scene.add(carrotGroup)
-    carrotsArray.push(carrotGroup)
+    // Determine pulls required based on size
+    cropGroup.userData.requiredPulls = Math.max(1, Math.floor(scale * 1.8))
+    cropGroup.userData.currentPulls = 0
+    cropGroup.userData.isUprooted = false
+    cropGroup.userData.cropType = type
+    
+    // Random slight tilt
+    cropGroup.rotation.x = (Math.random() - 0.5) * 0.2
+    cropGroup.rotation.z = (Math.random() - 0.5) * 0.2
+    
+    scene.add(cropGroup)
+    carrotsArray.push(cropGroup)
   }
 }
 
 function onMouseClick(event) {
-  if (rabbitGroup.userData.isPulling) return
+  if (rabbitGroup.userData.isPulling || rabbitGroup.userData.isFalling) return
 
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1
@@ -250,48 +319,67 @@ function onMouseClick(event) {
 function animate() {
   animationFrameId = requestAnimationFrame(animate)
   
-  if (rabbitGroup && targetPosition && !rabbitGroup.userData.isPulling) {
-    const currentPos = rabbitGroup.position.clone()
-    currentPos.y = 0
-    const targetPos2D = targetPosition.clone()
-    targetPos2D.y = 0
-    
-    const distance = currentPos.distanceTo(targetPos2D)
-    
-    if (distance > 0.5) {
-      // Move towards target
-      const dir = targetPos2D.sub(currentPos).normalize()
-      rabbitGroup.position.add(dir.multiplyScalar(0.2))
+  if (rabbitGroup && !rabbitGroup.userData.isFalling) {
+    // Check if rabbit is off the edge (ground is 50x50, so bounds are -25 to 25)
+    if (Math.abs(rabbitGroup.position.x) > 25 || Math.abs(rabbitGroup.position.z) > 25) {
+      fallOffEdge()
+    } else if (targetPosition && !rabbitGroup.userData.isPulling) {
+      const currentPos = rabbitGroup.position.clone()
+      currentPos.y = 0
+      const targetPos2D = targetPosition.clone()
+      targetPos2D.y = 0
       
-      // Hopping animation
-      if (!rabbitGroup.userData.isHopping) {
-        rabbitGroup.userData.isHopping = true
-        gsap.to(rabbitGroup.position, {
-          y: 0.8,
-          duration: 0.15,
-          yoyo: true,
-          repeat: 1,
-          ease: 'power1.out',
-          onComplete: () => {
-            rabbitGroup.userData.isHopping = false
+      const distance = currentPos.distanceTo(targetPos2D)
+      
+      if (distance > 0.5) {
+        // Move towards target
+        const dir = targetPos2D.sub(currentPos).normalize()
+        
+        // Speed depends on weight! Fat rabbit runs slower
+        const currentSpeed = Math.max(0.05, 0.2 - (weight.value - 5.0) * 0.01)
+        rabbitGroup.position.add(dir.multiplyScalar(currentSpeed))
+        
+        // Running burns calories
+        burnCalories(0.002)
+        
+        // Hopping animation
+        if (!rabbitGroup.userData.isHopping) {
+          rabbitGroup.userData.isHopping = true
+          gsap.to(rabbitGroup.position, {
+            y: 0.8,
+            duration: 0.15,
+            yoyo: true,
+            repeat: 1,
+            ease: 'power1.out',
+            onComplete: () => {
+              rabbitGroup.userData.isHopping = false
+            }
+          })
+        }
+      } else {
+        // Reached destination
+        rabbitGroup.position.x = targetPosition.x
+        rabbitGroup.position.z = targetPosition.z
+        targetPosition = null
+        
+        // If destination was a carrot, start pulling!
+        if (rabbitGroup.userData.targetCarrot) {
+          const target = rabbitGroup.userData.targetCarrot
+          const index = rabbitGroup.userData.targetCarrotIndex
+          rabbitGroup.userData.targetCarrot = null
+          
+          // If rabbit is fat enough (>10kg), it can eat anything without pulling it out!
+          if (target.userData.isUprooted || weight.value > 10.0) {
+            eatCarrot(target, index)
+          } else {
+            pullCarrot(target, index)
           }
-        })
-      }
-    } else {
-      // Reached destination
-      rabbitGroup.position.x = targetPosition.x
-      rabbitGroup.position.z = targetPosition.z
-      targetPosition = null
-      
-      // If destination was a carrot, start pulling!
-      if (rabbitGroup.userData.targetCarrot) {
-        pullCarrot(rabbitGroup.userData.targetCarrot, rabbitGroup.userData.targetCarrotIndex)
-        rabbitGroup.userData.targetCarrot = null
+        }
       }
     }
   }
   
-  if (rabbitGroup) {
+  if (rabbitGroup && !rabbitGroup.userData.isFalling) {
     // Camera follow
     camera.position.x += (rabbitGroup.position.x - camera.position.x) * 0.1
     camera.position.z += (rabbitGroup.position.z + 15 - camera.position.z) * 0.1
@@ -301,55 +389,185 @@ function animate() {
   renderer.render(scene, camera)
 }
 
+function fallOffEdge() {
+  rabbitGroup.userData.isFalling = true
+  targetPosition = null
+  
+  // Stop any hopping
+  gsap.killTweensOf(rabbitGroup.position)
+  
+  // Fall down animation
+  gsap.to(rabbitGroup.position, {
+    y: -20,
+    duration: 1.5,
+    ease: 'power2.in',
+    onComplete: () => {
+      // Reset game
+      alert("哎呀！兔子掉下去了！游戏重新开始。")
+      resetGame()
+    }
+  })
+  
+  // Spin while falling
+  gsap.to(rabbitGroup.rotation, {
+    x: Math.PI * 4,
+    y: Math.PI * 4,
+    z: Math.PI * 4,
+    duration: 1.5,
+    ease: 'power1.in'
+  })
+}
+
+function resetGame() {
+  // Clear old carrots
+  carrotsArray.forEach(c => {
+    if (c) scene.remove(c)
+  })
+  carrotsArray = []
+  
+  // Reset score
+  score.value = 0
+  
+  // Reset rabbit
+  rabbitGroup.position.set(0, 0, 0)
+  rabbitGroup.rotation.set(0, 0, 0)
+  rabbitGroup.userData.isFalling = false
+  rabbitGroup.userData.isPulling = false
+  rabbitGroup.userData.isHopping = false
+  rabbitGroup.userData.targetCarrot = null
+  targetPosition = null
+  
+  // Respawn field
+  createCarrotField()
+  
+  // Reset camera
+  camera.position.set(0, 15, 15)
+  camera.lookAt(0, 0, 0)
+}
+
+function updateRabbitScale() {
+  // Make the weight gain much more visible (exaggerated scaling)
+  // At 10kg (double weight), the rabbit will be twice as wide
+  const scaleFactor = Math.max(1.0, 1.0 + (weight.value - 5.0) * 0.2)
+  gsap.to(rabbitGroup.scale, {
+    x: scaleFactor,
+    y: 1.0 + (scaleFactor - 1.0) * 0.2, // slightly taller but mostly fatter
+    z: scaleFactor,
+    duration: 0.3,
+    ease: "power2.out"
+  })
+}
+
+function burnCalories(amount) {
+  if (weight.value > 5.0) {
+    weight.value = Math.max(5.0, weight.value - amount)
+    updateRabbitScale()
+  }
+}
+
 function pullCarrot(carrot, index) {
   rabbitGroup.userData.isPulling = true
+  carrot.userData.currentPulls++
+  
+  // Pulling is hard work! Burn some calories
+  burnCalories(0.1)
+  
+  const isUprootedNow = carrot.userData.currentPulls >= carrot.userData.requiredPulls
+  
+  // Fatter rabbit pulls and eats faster!
+  // Base weight is 5.0kg. At 15kg (10kg gain), action speed is 3x faster (duration / 3)
+  const speedMultiplier = Math.max(1.0, 1.0 + (weight.value - 5.0) * 0.2)
+  const animDuration = 0.2 / speedMultiplier
   
   // Pull animation (dip down then jump up)
   gsap.to(rabbitGroup.position, {
     y: -0.2,
-    duration: 0.2,
+    duration: animDuration,
     ease: 'power2.in',
     onComplete: () => {
       if (carrot) {
-        carrotsArray[index] = null
-        
-        // Pop the carrot out
-        gsap.to(carrot.position, {
-          y: 3,
-          duration: 0.3,
-          ease: 'back.out(1.7)'
-        })
-        gsap.to(carrot.rotation, {
-          x: Math.PI * 2,
-          y: Math.PI * 2,
-          duration: 0.5
-        })
-        
-        // Carrot disappears
-        gsap.to(carrot.scale, {
-          x: 0, y: 0, z: 0,
-          duration: 0.2,
-          delay: 0.4,
-          onComplete: () => {
-            scene.remove(carrot)
-            score.value++
-            
-            if (score.value >= 40) {
-              setTimeout(() => alert("你拔光了所有的萝卜！兔子吃饱了！"), 500)
-            }
-          }
-        })
+        if (isUprootedNow) {
+          carrot.userData.isUprooted = true
+          
+          // Pop the carrot out and lay it on the ground
+          gsap.to(carrot.position, {
+            y: 0.4 * carrot.scale.y, // Lay on ground depending on scale
+            x: carrot.position.x + (Math.random() - 0.5) * 1.5,
+            z: carrot.position.z + (Math.random() - 0.5) * 1.5,
+            duration: 0.3 / speedMultiplier,
+            ease: 'back.out(1.7)'
+          })
+          gsap.to(carrot.rotation, {
+            x: Math.PI / 2 + (Math.random() - 0.5) * 0.5, // lay flat
+            z: Math.random() * Math.PI * 2,
+            duration: 0.3 / speedMultiplier
+          })
+        } else {
+          // Struggle animation (carrot wiggles)
+          gsap.to(carrot.rotation, {
+            x: carrot.rotation.x + 0.15,
+            z: carrot.rotation.z + 0.15,
+            yoyo: true,
+            repeat: 3,
+            duration: 0.05 / speedMultiplier
+          })
+        }
       }
       
       // Rabbit jumps back up
       gsap.to(rabbitGroup.position, {
         y: 0,
-        duration: 0.2,
+        duration: animDuration,
         ease: 'power2.out',
         onComplete: () => {
           rabbitGroup.userData.isPulling = false
         }
       })
+    }
+  })
+}
+
+function eatCarrot(carrot, index) {
+  rabbitGroup.userData.isPulling = true
+  
+  // Fatter rabbit pulls and eats faster!
+  const speedMultiplier = Math.max(1.0, 1.0 + (weight.value - 5.0) * 0.2)
+  const animDuration = 0.15 / speedMultiplier
+  
+  // Eat animation (nibble)
+  gsap.to(rabbitGroup.position, {
+    y: -0.2,
+    duration: animDuration,
+    yoyo: true,
+    repeat: 3,
+    ease: 'power1.inOut',
+    onComplete: () => {
+      if (carrot) {
+        carrotsArray[index] = null
+        
+        // Calculate weight gain based on the size of the crop (more exaggerated)
+        const sizeGain = carrot.scale.x * 0.8 // E.g., size 3.0 gives 2.4kg gain!
+        weight.value += sizeGain
+        updateRabbitScale()
+        
+        // Carrot disappears
+        gsap.to(carrot.scale, {
+          x: 0, y: 0, z: 0,
+          duration: 0.2 / speedMultiplier,
+          onComplete: () => {
+            scene.remove(carrot)
+            score.value++
+            
+            // Check win condition
+            if (score.value >= 40) {
+              setTimeout(() => alert("你吃光了所有的果蔬！兔子吃饱了！"), 500)
+            }
+          }
+        })
+      }
+      
+      rabbitGroup.position.y = 0
+      rabbitGroup.userData.isPulling = false
     }
   })
 }
