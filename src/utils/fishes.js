@@ -6,7 +6,9 @@ export const colors = [0xff9900, 0xff3333, 0x3399ff, 0xffcc00, 0xcc33ff, 0x33cc3
 
 export function createFishes(count, scene, fishArray, fishCountRef) {
   for (let i = 0; i < count; i++) {
-    const type = fishTypes[Math.floor(Math.random() * fishTypes.length)]
+    // If count matches exactly the number of types (7), create one of each
+    // Otherwise fall back to random types
+    const type = count === fishTypes.length ? fishTypes[i] : fishTypes[Math.floor(Math.random() * fishTypes.length)]
     const color = colors[Math.floor(Math.random() * colors.length)]
     
     const fish = createFishModel(type, color)

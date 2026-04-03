@@ -118,7 +118,8 @@ onMounted(() => {
   water = waterRef.value
   
   const fishCountRef = { value: fishCount.value }
-  createFishes(40, scene, fishArray, fishCountRef) // create 40 fishes initially
+  // Create exactly 7 fishes initially, one for each type
+  createFishes(7, scene, fishArray, fishCountRef)
   fishCount.value = fishCountRef.value
   
   spawnInitialMushrooms(scene, camera, mushroomArray, gameState.value, fishCount.value) // spawn initial mushrooms based on fish count

@@ -90,10 +90,11 @@ export function animateGame(
     const hungerTime = now - fish.userData.lastEatenTime
     const canEat = hungerTime > 20000 // Fixed 20 seconds cooldown
     
-    // Faint if starving (hungry for too long, say another 30s)
+    // Faint if starving (hungry for 30s after the 20s cooldown, total 50s)
     if (!fish.userData.isStunned && hungerTime > 50000) {
       fish.userData.isStunned = true
       fish.userData.isStartled = false
+      fish.userData.isStarvedFaint = true // Mark as fainted from hunger
       fish.userData.hitCount = 0
       fish.userData.velocity.set(0, -0.05, 0)
       
@@ -102,42 +103,14 @@ export function animateGame(
         duration: 0.5,
         ease: 'power2.out'
       })
-      
-      setTimeout(() => {
-        if (fish && fish.userData) {
-          gsap.to(fish.rotation, {
-            z: 0,
-            duration: 0.5,
-            ease: 'power2.inOut'
-          })
-        }
-      }, 30000)
-      
-      setTimeout(() => {
-        if (fish && fish.userData) {
-          fish.userData.isStunned = false
-          fish.userData.isStartled = true
-          fish.userData.lastEatenTime = Date.now()
-          
-          const escapeDir = new THREE.Vector3(
-            (Math.random() - 0.5),
-            (Math.random() - 0.5) * 0.2,
-            (Math.random() - 0.5)
-          ).normalize()
-          fish.userData.velocity.copy(escapeDir.multiplyScalar(0.2))
-          
-          setTimeout(() => {
-            if (fish && fish.userData) fish.userData.isStartled = false
-          }, 3000)
-        }
-      }, 33000)
+      // The recovery logic will be triggered when the fish hits the bottom
     }
     
     if (canEat && !fish.userData.isStartled && !fish.userData.isStunned) {
       let targetItem = null
       let targetType = ''
       let itemIndex = -1
-      let minDist = 15 // Only care about food within 15 units (near the fish)
+      let minDist = 35 // Increase feeding detection range so fish can spot food from further away
       
       // Find the absolute closest food item (player food or mushroom)
       if (foodArray.length > 0) {
@@ -166,7 +139,8 @@ export function animateGame(
       
       if (targetItem) {
         targetVec = targetItem.position.clone().sub(fish.position)
-        if (targetType === 'mushroom') targetVec.y -= 0.5 
+        // Adjust targeting slightly above the mushroom base so fish doesn't dive into the floor
+        if (targetType === 'mushroom') targetVec.y += 0.2 
         targetVec.normalize()
         
         targetSpeed = currentMaxSpeed * (targetType === 'playerFood' ? 2.5 : 1.2)
@@ -193,6 +167,7 @@ export function animateGame(
           if (isPoisonous) {
             fish.userData.isStunned = true
             fish.userData.isStartled = false
+            fish.userData.isPoisonedDead = true // Mark as dead from poison
             fish.userData.hitCount = 0
             fish.userData.velocity.set(0, -0.05, 0)
             
@@ -201,18 +176,7 @@ export function animateGame(
               duration: 0.5,
               ease: 'power2.out'
             })
-            
-            setTimeout(() => {
-              if (!fish || !fish.parent) return
-              gsap.to(fish.scale, {
-                x: 0, y: 0, z: 0,
-                duration: 1,
-                onComplete: () => {
-                  scene.remove(fish)
-                  fish.userData.dead = true // mark to filter
-                }
-              })
-            }, 30000)
+            // The 2s disappearance logic is now handled when the fish hits the bottom
           } else {
             fish.userData.itemsEaten = (fish.userData.itemsEaten || 0) + 1
             if (fish.userData.itemsEaten >= 2) {
@@ -271,7 +235,11 @@ export function animateGame(
         if (p.x > boundsX) { fish.userData.targetDirection.x = -Math.abs(fish.userData.targetDirection.x) - 0.1; v.x -= 0.01 }
         if (p.x < -boundsX) { fish.userData.targetDirection.x = Math.abs(fish.userData.targetDirection.x) + 0.1; v.x += 0.01 }
         if (p.y > boundsY) { fish.userData.targetDirection.y = -Math.abs(fish.userData.targetDirection.y) - 0.1; v.y -= 0.01 }
-        if (p.y < 1) { fish.userData.targetDirection.y = Math.abs(fish.userData.targetDirection.y) + 0.1; v.y += 0.01 }
+        if (p.y < 1) { 
+          fish.userData.targetDirection.y = Math.abs(fish.userData.targetDirection.y) + 0.1; 
+          v.y += 0.01; 
+          if (p.y < 0.5) p.y = 0.5; // Prevent clipping through the floor and accumulating infinite upward velocity
+        }
         if (p.z > boundsZ) { fish.userData.targetDirection.z = -Math.abs(fish.userData.targetDirection.z) - 0.1; v.z -= 0.01 }
         if (p.z < -boundsZ) { fish.userData.targetDirection.z = Math.abs(fish.userData.targetDirection.z) + 0.1; v.z += 0.01 }
         fish.userData.targetDirection.normalize()
@@ -290,9 +258,56 @@ export function animateGame(
     
     fish.position.add(fish.userData.velocity)
     
-    if (fish.userData.isStunned && fish.position.y < 1.0) {
+    if (fish.userData.isStunned && fish.position.y <= 1.0) {
       fish.position.y = 1.0
       fish.userData.velocity.set(0, 0, 0)
+      
+      if (fish.userData.isPoisonedDead && !fish.userData.disappearing) {
+        fish.userData.disappearing = true
+        setTimeout(() => {
+          if (!fish || !fish.parent) return
+          gsap.to(fish.scale, {
+            x: 0, y: 0, z: 0,
+            duration: 1,
+            onComplete: () => {
+              scene.remove(fish)
+              fish.userData.dead = true // mark to filter
+            }
+          })
+        }, 2000)
+      } else if (fish.userData.isStarvedFaint && !fish.userData.recovering) {
+        fish.userData.recovering = true
+        
+        // Recover after 5 seconds of lying on the bottom
+        setTimeout(() => {
+          if (fish && fish.userData) {
+            gsap.to(fish.rotation, {
+              z: 0,
+              duration: 0.5,
+              ease: 'power2.inOut',
+              onComplete: () => {
+                fish.userData.isStunned = false
+                fish.userData.isStartled = true
+                fish.userData.isStarvedFaint = false
+                fish.userData.recovering = false
+                fish.userData.lastEatenTime = Date.now() // Reset hunger timer so it doesn't immediately faint again
+                
+                // Dash away upon waking up
+                const escapeDir = new THREE.Vector3(
+                  (Math.random() - 0.5),
+                  (Math.random() - 0.5) * 0.2,
+                  (Math.random() - 0.5)
+                ).normalize()
+                fish.userData.velocity.copy(escapeDir.multiplyScalar(0.2))
+                
+                setTimeout(() => {
+                  if (fish && fish.userData) fish.userData.isStartled = false
+                }, 3000)
+              }
+            })
+          }
+        }, 5000)
+      }
     }
     
     if (!fish.userData.isStunned && fish.userData.velocity.lengthSq() > 0.0001) {
