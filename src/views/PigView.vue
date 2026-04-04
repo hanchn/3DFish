@@ -125,6 +125,13 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('mousemove', onMouseMove)
   
+  // 清理所有猪的定时器
+  pigs.forEach(pig => {
+    if (pig.userData.autoSpawnTimer) {
+      clearInterval(pig.userData.autoSpawnTimer)
+    }
+  })
+  
   if (renderer) {
     renderer.dispose()
     document.getElementById('pig-container').innerHTML = ''
@@ -269,6 +276,16 @@ function spawnPigs(count, position = null) {
     pig.userData.speed = 0.05 + Math.random() * 0.02
     pig.userData.state = 'idle' // 'idle' or 'eating'
     pig.userData.applesEaten = 0 // 记录吃了多少个苹果
+    
+    // 每隔20s自动生一只新猪
+    pig.userData.autoSpawnTimer = setInterval(() => {
+      // 只有在没被卡车装走的情况下才生小猪
+      if (pig.userData.state !== 'in_truck' && pig.userData.state !== 'dragged') {
+        spawnPigs(1, pig.position)
+        // 稍微跳一下表示生了小猪
+        gsap.to(pig.position, { y: 4, duration: 0.3, yoyo: true, repeat: 1 })
+      }
+    }, 20000)
     
     scene.add(pig)
     pigs.push(pig)
@@ -466,6 +483,11 @@ function callTruckForPig(pig) {
 }
 
 function loadPigIntoTruck(pig) {
+  // 清除定时器，避免在车上或消失后还生小猪
+  if (pig.userData.autoSpawnTimer) {
+    clearInterval(pig.userData.autoSpawnTimer)
+  }
+  
   // 把猪“吸”进车厢
   gsap.to(pig.position, {
     x: truck.position.x,
@@ -532,7 +554,7 @@ function animate() {
   }
   
   pigs.forEach(pig => {
-    if (pig.userData.state === 'eating' || pig.userData.state === 'dragged' || pig.userData.state === 'in_truck') return // Skip moving if busy
+    if (pig.userData.state === 'eating' || pig.userData.state === 'dragged' || pig.userData.state === 'in_truck' || pig.userData.state === 'waiting_for_truck') return // Skip moving if busy
     
     // Find closest apple
     let closestApple = null
@@ -629,6 +651,12 @@ function animate() {
   })
   
   renderer.render(scene, camera)
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(window.innerWidth, window.innerHeight)
 }
 
 function onMouseMove(event) {

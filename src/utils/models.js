@@ -142,6 +142,9 @@ export function createFishModel(type, color) {
   if (type === 'lemon') baseSpeed = 0.012
   if (type === 'watermelon') baseSpeed = 0.010
   if (type === 'apple') baseSpeed = 0.011
+  if (type === 'chicken') baseSpeed = 0.008
+  if (type === 'duck') baseSpeed = 0.008
+  if (type === 'milk') baseSpeed = 0.005
 
   const group = new THREE.Group()
   group.userData.baseSpeed = baseSpeed
@@ -373,6 +376,76 @@ export function createFishModel(type, color) {
     
     // Tail feathers
     tailGeo = new THREE.BoxGeometry(0.8, 0.1, 0.8)
+  } else if (type === 'chicken') {
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff }) // White chicken
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xff0000 }) // Comb
+    const beakMat = new THREE.MeshStandardMaterial({ color: 0xffa500 }) // Orange for beak/feet
+    
+    const bodyGeo = new THREE.SphereGeometry(0.6, 16, 16)
+    bodyGeo.scale(1, 1, 1.2)
+    const body = new THREE.Mesh(bodyGeo, bodyMat)
+    body.position.y = 0.6
+    
+    const headGeo = new THREE.SphereGeometry(0.4, 16, 16)
+    const head = new THREE.Mesh(headGeo, bodyMat)
+    head.position.set(0, 1.2, 0.5)
+    
+    const beakGeo = new THREE.ConeGeometry(0.15, 0.4, 4)
+    beakGeo.rotateX(Math.PI / 2)
+    const beak = new THREE.Mesh(beakGeo, beakMat)
+    beak.position.set(0, 1.2, 0.9)
+    
+    const combGeo = new THREE.BoxGeometry(0.1, 0.3, 0.4)
+    const comb = new THREE.Mesh(combGeo, redMat)
+    comb.position.set(0, 1.5, 0.5)
+    
+    bodyGroup.add(body, head, beak, comb)
+  } else if (type === 'duck') {
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffff00 }) // Yellow duck
+    const beakMat = new THREE.MeshStandardMaterial({ color: 0xffa500 }) // Orange for beak/feet
+    
+    const bodyGeo = new THREE.SphereGeometry(0.7, 16, 16)
+    bodyGeo.scale(1, 0.8, 1.3)
+    const body = new THREE.Mesh(bodyGeo, bodyMat)
+    body.position.y = 0.5
+    
+    const headGeo = new THREE.SphereGeometry(0.45, 16, 16)
+    const head = new THREE.Mesh(headGeo, bodyMat)
+    head.position.set(0, 1.1, 0.6)
+    
+    const beakGeo = new THREE.BoxGeometry(0.3, 0.1, 0.5)
+    const beak = new THREE.Mesh(beakGeo, beakMat)
+    beak.position.set(0, 1.05, 1.0)
+    
+    bodyGroup.add(body, head, beak)
+  } else if (type === 'milk') {
+    // Glass bottle
+    const bottleGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 16)
+    const bottleMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      transmission: 0.9,
+      opacity: 1,
+      transparent: true,
+      roughness: 0.1
+    })
+    const bottle = new THREE.Mesh(bottleGeo, bottleMat)
+    
+    // Milk inside
+    const milkGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.8, 16)
+    const milkMat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+    const milk = new THREE.Mesh(milkGeo, milkMat)
+    milk.position.y = -0.05
+    
+    // Cap
+    const capGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.2, 16)
+    const capMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6 })
+    const cap = new THREE.Mesh(capGeo, capMat)
+    cap.position.y = 0.6
+    
+    bodyGroup.add(bottle, milk, cap)
+    
+    // Water floating bobbing logic uses this
+    group.userData.isItem = true 
   }
   
   // Enable shadows for body parts
@@ -418,7 +491,7 @@ export function createFishModel(type, color) {
   }
   
   // Eyes
-  if (type !== 'jellyfish' && type !== 'lemon' && type !== 'watermelon' && type !== 'apple') {
+  if (type !== 'jellyfish' && type !== 'lemon' && type !== 'watermelon' && type !== 'apple' && type !== 'milk') {
     const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8)
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
     const eyeR = new THREE.Mesh(eyeGeo, eyeMat)
@@ -439,6 +512,12 @@ export function createFishModel(type, color) {
     } else if (type === 'bird') {
       eyeR.position.set(0.3, 0.3, 0.8)
       eyeL.position.set(-0.3, 0.3, 0.8)
+    } else if (type === 'chicken') {
+      eyeR.position.set(0.25, 1.3, 0.7)
+      eyeL.position.set(-0.25, 1.3, 0.7)
+    } else if (type === 'duck') {
+      eyeR.position.set(0.25, 1.2, 0.8)
+      eyeL.position.set(-0.25, 1.2, 0.8)
     } else {
       eyeR.position.set(type === 'flat' ? 0.2 : 0.4, 0.1, 0.5)
       eyeL.position.set(type === 'flat' ? -0.2 : -0.4, 0.1, 0.5)

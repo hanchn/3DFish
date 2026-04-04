@@ -6,6 +6,7 @@
       <router-link to="/rabbit" class="nav-btn" :class="{ active: $route.name === 'rabbit' }">🐰 拔萝卜</router-link>
       <router-link to="/cow" class="nav-btn" :class="{ active: $route.name === 'cow' }">🐄 挤奶</router-link>
       <router-link to="/pig" class="nav-btn" :class="{ active: $route.name === 'pig' }">🐷 喂猪</router-link>
+      <router-link to="/fishing" class="nav-btn" :class="{ active: $route.name === 'fishing' }">🎣 钓鱼</router-link>
       <button @click="showNav = !showNav" class="toggle-nav-btn">{{ showNav ? '隐藏菜单' : '显示菜单' }}</button>
     </nav>
     <div v-else class="hidden-nav-trigger" @mouseenter="showNav = true">

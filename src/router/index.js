@@ -3,6 +3,7 @@ import FishView from '../views/FishView.vue'
 import RabbitView from '../views/RabbitView.vue'
 import CowView from '../views/CowView.vue'
 import PigView from '../views/PigView.vue'
+import CatFishingView from '../views/CatFishingView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,6 +27,11 @@ const router = createRouter({
       path: '/pig',
       name: 'pig',
       component: PigView
+    },
+    {
+      path: '/fishing',
+      name: 'fishing',
+      component: CatFishingView
     }
   ]
 })
